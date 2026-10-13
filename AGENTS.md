@@ -30,10 +30,13 @@ git은 dev 브렌치를 사용합니다.
 기본적으로 git 행위를 지속적으로 업데이트합니다.
 항상 코드 수정을 할 때마다 git을 합니다.
 
+git 저장소는 LXIUM 저장소 하나입니다 (https://github.com/LocalXtend/LXIUM). 이 폴더에서 `git init`을 하지 않고, 커밋은 LXIUM 저장소에 합니다.
+릴리즈 태그는 `<id>-v<버전>` 형식입니다 (예: `LXIUM_sephiria-v1.0.0`). `id`는 애드온 구조 절의 값입니다.
+
 커밋은 GitHub 계정 LocalXtend로 합니다 (`user.name=LocalXtend`, `user.email=285211027+LocalXtend@users.noreply.github.com`).
 
 ## Readme 작성법
-소스 저장소의 README.md는 아래 내용을 그대로 씁니다. 버전 줄만 바꿉니다.
+이 폴더의 README.md는 아래 내용을 그대로 씁니다. 버전 줄만 바꿉니다.
 (현재 = 방금 릴리즈한 버전)
 ```
 # LXIUM_mahosaba
