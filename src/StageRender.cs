@@ -132,7 +132,7 @@ namespace LXIUM_mahosaba
         // 깊이: SSAO를 끄면 깊이 텍스처가 안 생기는데 원본 불 셰이더는 깊이를 읽으므로 따로 요청 (FireLite는 깊이를 읽지 않음)
         static void ApplyCameraData()
         {
-            bool needDepth = UrpTuning.Ssao == SsaoMode.Off && !FireRender.UsingLite;
+            bool needDepth = UrpTuning.Ssao == SsaoMode.Off && !CourtShaders.Fire.Active;
             if (_main == null) _main = Camera.main?.GetComponent<UniversalAdditionalCameraData>();
             bool mainPost = _main == null || _main.renderPostProcessing;
             for (int i = 0; i < _data.Length; i++)

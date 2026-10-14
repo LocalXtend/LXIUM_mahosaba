@@ -37,7 +37,7 @@ namespace LXIUM_mahosaba
             long t = Stopwatch.GetTimestamp();
             FrameRate.Enforce();
             if (!_urpApplied) _urpApplied = UrpTuning.Apply();
-            FireRender.Tick();
+            CourtShaders.Tick();
             RenderLab.Tick(this);
             RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
         }

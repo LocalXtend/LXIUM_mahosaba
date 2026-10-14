@@ -47,28 +47,19 @@ namespace LXIUM_mahosaba
                 ActorRender.ChangeOnly = false;
                 StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = false;
                 StageRender.ResolutionOverride = 1f;
-                FireRender.Lite = false;
+                CourtShaders.Fire.On = CourtShaders.Court.On = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
             ("02_noStage", () => StageRender.Freeze = true),
-            // 진단: 무대 화면을 뺀 UI 캔버스를 숨김. 01과의 차이 = UI(대사창·메뉴·글자·그림자) 비용
-            ("03_noUI", () => HideUi(true)),
-            // 안 보이는 무대 화면 컬링을 끔 (0.2.3 이전 동작). 01과의 차이 = 컬링 효과
-            ("04_screenCullOff", () => StageRender.CullHidden = false),
-            ("05_stageHalfRate", () => StageRender.HalfRate = true),
-            ("06_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
-            ("07_mainPostOff", () => MainPost(true)),
-            ("08_fireOn", () => Fire(Settings.FireLite.Value)),
-            ("09_current", null),
+            // 진단: 법정 바닥·계단·벽·단상을 끔. 01과의 차이 = CourtLite가 줄일 수 있는 상한
+            ("03_courtHidden", () => _courtCount = CourtShaders.HideCourt(true)),
+            ("04_courtLite", () => CourtShaders.Court.On = true),
+            ("05_courtOriginal", () => CourtShaders.Court.On = false),
+            ("06_current", null),
         };
 
-        static int _fireCount;
-        static void Fire(bool lite)
-        {
-            _fireCount = FireRender.ForceFire(true);
-            FireRender.Lite = lite;
-        }
+        static int _courtCount;
 
         static UniversalAdditionalCameraData _main;
         static bool _mainPost;
@@ -120,8 +111,9 @@ namespace LXIUM_mahosaba
             StageRender.ResolutionOverride = null;
             StageRender.Freeze = false;
             StageRender.CullHidden = true;
-            FireRender.Lite = Settings.FireLite.Value;
-            FireRender.ForceFire(false);
+            CourtShaders.Fire.On = Settings.FireLite.Value;
+            CourtShaders.Court.On = Settings.CourtLite.Value;
+            CourtShaders.HideCourt(false);
             MainPost(false);
             HideUi(false);
         }
@@ -142,7 +134,7 @@ namespace LXIUM_mahosaba
             {
                 var (name, apply) = Presets[i];
                 ApplySettings();
-                _fireCount = 0;
+                _courtCount = 0;
                 apply?.Invoke();
                 Status = $"LXIUM 렌더 실험 {i + 1}/{Presets.Length} ({name}) — 화면을 그대로 두세요";
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
@@ -158,7 +150,7 @@ namespace LXIUM_mahosaba
                 }
                 int frames = times.Count;
                 string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
-                if (_fireCount > 0) extra += $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}";
+                if (_courtCount > 0) extra += $" courtRenderers={_courtCount}";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +

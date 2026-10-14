@@ -40,7 +40,7 @@
     <Reference Include="$(InteropDir)\Assembly-CSharp.dll" Private="false" />
   </ItemGroup>
 
-  <!-- shaders/build_firelite.py로 만든 FireLite 셰이더 번들. DLL에 넣어 파일 하나로 배포 -->
+  <!-- shaders/build_shaders.py로 만든 FireLite·CourtLite 셰이더 번들. DLL에 넣어 파일 하나로 배포 -->
   <ItemGroup>
     <EmbeddedResource Include="res\lxium_mahosaba.bundle" LogicalName="lxium_mahosaba.bundle" />
   </ItemGroup>
