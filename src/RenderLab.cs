@@ -13,7 +13,7 @@ using UnityEngine.Rendering.Universal;
 namespace LXIUM_mahosaba
 {
     // 렌더 실험실 (docs/ai/mahosaba-render.md 3장). 설정 Debug.RenderLab=true일 때 F10으로 시작.
-    // 게임 원래 상태와 지금 설정을 잰 뒤, 지금 설정에 실험 하나씩만 더해 8초씩(안정 2초 + 측정 6초)
+    // 게임 원래 상태와 지금 설정을 잰 뒤, 지금 설정에서 하나씩만 바꿔 8초씩(안정 2초 + 측정 6초)
     // 프레임 통계·스크린샷을 남긴다. 마지막에 지금 설정을 다시 재서 발열 등으로 생긴 차이를 본다.
     // 끝나면 설정값으로 되돌린다. 측정 중에는 프레임 제한과 VSync를 끈다.
     static class RenderLab
@@ -42,30 +42,22 @@ namespace LXIUM_mahosaba
             ("00_original", () =>
             {
                 UrpTuning.Set(false, SsaoMode.Game, false);
-                UrpTuning.DepthPriming = false;
                 ActorRender.ChangeOnly = false;
                 StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = false;
                 StageRender.ResolutionOverride = 1f;
                 FireRender.Lite = false;
             }),
             ("01_current", null),
-            ("02_ssaoLite", () => SetSsao(SsaoMode.StageLite)),
+            // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
+            ("02_noStage", () => StageRender.Freeze = true),
             ("03_ssaoOff", () => SetSsao(SsaoMode.Off)),
-            ("04_stageMsaaOff", () => StageRender.MsaaOff = true),
-            ("05_depthPriming", () => StageRender.MsaaOff = UrpTuning.DepthPriming = true),
-            ("06_stagePostOff", () => StageRender.PostOff = true),
+            ("04_ssaoFull", () => SetSsao(SsaoMode.StageOnly)),
+            ("05_stageHalfRate", () => StageRender.HalfRate = true),
+            ("06_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
             ("07_mainPostOff", () => MainPost(true)),
-            ("08_stageHalfRate", () => StageRender.HalfRate = true),
-            ("09_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
-            ("10_fireOn", () => Fire(false)),
-            ("11_fireLite", () => Fire(true)),
-            ("12_combo", () =>
-            {
-                SetSsao(SsaoMode.StageLite);
-                StageRender.MsaaOff = UrpTuning.DepthPriming = StageRender.PostOff = true;
-                FireRender.Lite = true;
-            }),
-            ("13_current", null),
+            ("08_fireOn", () => Fire(Settings.FireLite.Value)),
+            ("09_fireOriginal", () => Fire(false)),
+            ("10_current", null),
         };
 
         static void SetSsao(SsaoMode mode) => UrpTuning.Set(UrpTuning.MsaaOff, mode, UrpTuning.IntermediateAuto);
@@ -98,13 +90,13 @@ namespace LXIUM_mahosaba
         public static void ApplySettings()
         {
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
-            UrpTuning.DepthPriming = Settings.DepthPriming.Value;
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
             StageRender.HiddenSkip = Settings.StageHiddenSkip.Value;
             StageRender.MsaaOff = Settings.StageMsaaOff.Value;
             StageRender.PostOff = Settings.StagePostOff.Value;
             StageRender.HalfRate = Settings.StageHalfRate.Value;
             StageRender.ResolutionOverride = null;
+            StageRender.Freeze = false;
             FireRender.Lite = Settings.FireLite.Value;
             FireRender.ForceFire(false);
             MainPost(false);
@@ -133,7 +125,7 @@ namespace LXIUM_mahosaba
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
 
                 times.Clear();
-                double cpu = 0, gpu = 0;
+                double cpu = 0, wait = 0, gpu = 0;
                 int timed = 0;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
@@ -141,16 +133,18 @@ namespace LXIUM_mahosaba
                 {
                     times.Add(Time.unscaledDeltaTime);
                     FrameTimingManager.CaptureFrameTimings();
-                    if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].gpuFrameTime > 0)
+                    if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].cpuMainThreadFrameTime > 0)
                     {
                         cpu += timing[0].cpuMainThreadFrameTime;
+                        wait += timing[0].cpuMainThreadPresentWaitTime;
                         gpu += timing[0].gpuFrameTime;
                         timed++;
                     }
                     yield return null;
                 }
                 int frames = times.Count;
-                string extra = timed > 0 ? $" cpuMain={cpu / timed:F2}ms gpu={gpu / timed:F2}ms" : "";
+                // cpuMain에는 GPU를 기다리는 시간(presentWait)이 들어 있음. D3D11에서는 gpu가 0으로 올 수 있음
+                string extra = timed > 0 ? $" cpuMain={cpu / timed:F2}ms presentWait={wait / timed:F2}ms gpu={gpu / timed:F2}ms" : "";
                 if (_fireCount > 0) extra += $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +

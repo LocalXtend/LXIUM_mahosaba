@@ -16,7 +16,9 @@ namespace LXIUM_mahosaba
         public static bool IsStageCamera(Camera cam) => !cam.orthographic;
 
         // 설정·실험실이 정하는 값
-        internal static bool HiddenSkip, MsaaOff, PostOff, HalfRate, NeedDepth;
+        internal static bool HiddenSkip, MsaaOff, PostOff, HalfRate;
+        // 실험실 진단용: 무대 카메라를 모두 멈춰(RT는 마지막 그림 유지) 메인 카메라·UI·캐릭터만의 비용을 잼
+        internal static bool Freeze;
         // 실험실이 측정 동안 덮어쓰는 배율. null이면 설정값 사용
         internal static float? ResolutionOverride;
         internal static int Skipped;
@@ -88,7 +90,7 @@ namespace LXIUM_mahosaba
             {
                 var cam = _cameras[i];
                 if (cam == null) continue;
-                bool want = presented && (!HiddenSkip || Visible(_images[i]));
+                bool want = presented && !Freeze && (!HiddenSkip || Visible(_images[i]));
                 // 반 프레임: 카메라가 멈춰 있으면 두 프레임에 한 번만 그리고 그 사이에는 RT의 지난 그림을 그대로 보여 줌.
                 // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림
                 if (want && HalfRate && !Moved(i, cam) && ((Time.frameCount + i) & 1) == 1) want = false;
@@ -114,16 +116,18 @@ namespace LXIUM_mahosaba
         }
 
         // 후처리: 볼륨 효과가 모두 0이라 무대 카메라의 후처리는 LUT 만들기 + FXAA뿐이고, 메인 카메라가 화면 전체에
-        // FXAA를 한 번 더 함. 깊이: SSAO를 끄면 원본 불 셰이더가 읽을 깊이 텍스처를 따로 요청
+        // FXAA를 한 번 더 함. 깊이: SSAO를 끄면 깊이 텍스처가 안 생기는데 원본 불 셰이더는 깊이를 읽으므로 따로 요청
+        // (FireLite는 깊이를 읽지 않음)
         static void ApplyCameraData()
         {
+            bool needDepth = UrpTuning.Ssao == SsaoMode.Off && !FireRender.UsingLite;
             for (int i = 0; i < _data.Length; i++)
             {
                 var d = _data[i];
                 if (d == null) continue;
                 bool post = _origPost[i] && !PostOff;
                 if (d.renderPostProcessing != post) d.renderPostProcessing = post;
-                var depth = NeedDepth ? CameraOverrideOption.On : _origDepth[i];
+                var depth = needDepth ? CameraOverrideOption.On : _origDepth[i];
                 if (d.requiresDepthOption != depth) d.requiresDepthOption = depth;
             }
         }

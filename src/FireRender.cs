@@ -22,6 +22,9 @@ namespace LXIUM_mahosaba
         static bool _loaded;
         static readonly List<Material> Materials = new();
 
+        // FireLite가 실제로 쓰이는 중인지 (D3D11이 아니면 셰이더가 지원되지 않아 원본 유지)
+        internal static bool UsingLite => _applied && _lite != null;
+
         public static void Tick()
         {
             if (!Lite && !_applied) return;
