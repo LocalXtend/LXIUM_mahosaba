@@ -38,6 +38,7 @@ namespace LXIUM_mahosaba
         static Quaternion[] _lastRot;
         static float[] _lastFov;
         static UniversalAdditionalCameraData _main;
+        static bool[] _rendering;
 
         [HarmonyPatch(typeof(StageCameraController), "SetCameraEnabled")]
         static class SetCameraEnabledPatch
@@ -67,6 +68,7 @@ namespace LXIUM_mahosaba
             _lastPos = new Vector3[n];
             _lastRot = new Quaternion[n];
             _lastFov = new float[n];
+            _rendering = new bool[n];
             for (int i = 0; i < n; i++)
             {
                 _cameras[i] = cams[i]._camera;
@@ -92,6 +94,7 @@ namespace LXIUM_mahosaba
             for (int i = 0; i < _cameras.Length; i++)
             {
                 var cam = _cameras[i];
+                _rendering[i] = false;
                 if (cam == null) continue;
                 bool visible = Visible(_images[i]);
                 bool want = presented && !Freeze && (!HiddenSkip || visible);
@@ -104,7 +107,9 @@ namespace LXIUM_mahosaba
                 if (want && HalfRate && !Moved(i, cam) && ((Time.frameCount + i) & 1) == 1) want = false;
                 if (cam.enabled != want) cam.enabled = want;
                 if (presented && !want) Skipped++;
+                _rendering[i] = want;
             }
+            CourtCache.Tick(_cameras, _rendering);
         }
 
         static bool Visible(RawImage img) =>

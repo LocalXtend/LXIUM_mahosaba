@@ -10,6 +10,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<SsaoMode> Ssao;
         public static ConfigEntry<bool> IntermediateAuto;
         public static ConfigEntry<bool> CharacterChangeOnly;
+        public static ConfigEntry<bool> FastDetect;
         public static ConfigEntry<float> CharacterResolution;
         public static ConfigEntry<float> StageResolution;
         public static ConfigEntry<bool> StageHiddenSkip;
@@ -18,6 +19,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> StageHalfRate;
         public static ConfigEntry<bool> FireLite;
         public static ConfigEntry<bool> CourtLite;
+        public static ConfigEntry<bool> CourtCache;
         public static ConfigEntry<bool> Lab;
 
         public static void Bind(ConfigFile c)
@@ -32,6 +34,8 @@ namespace LXIUM_mahosaba
                 "렌더러의 중간 텍스처를 Always에서 Auto로. 필요 없는 카메라(캐릭터 합성 등)의 복사 패스를 없앰");
             CharacterChangeOnly = c.Bind("Character", "ChangeOnly", true,
                 "레이어 캐릭터를 바뀐 프레임에만 다시 합성. 게임은 표정이 그대로여도 매 프레임 카메라 렌더를 함");
+            FastDetect = c.Bind("Character", "FastDetect", true,
+                "바뀔 때만 다시 그리기의 변화 확인을 가볍게: 최근에 바뀐 캐릭터만 매 프레임, 나머지는 4프레임에 한 번씩 돌아가며 확인 (놓친 변화는 최대 3프레임 늦음)");
             CharacterResolution = c.Bind("Character", "Resolution", 0f,
                 "레이어 캐릭터 합성 해상도 배율. 0 = 화면 해상도에 맞춤(1080p에서 0.75), 1 = 원래(100 PPU)");
             StageResolution = c.Bind("Stage", "Resolution", 0f,
@@ -48,6 +52,8 @@ namespace LXIUM_mahosaba
                 "법정 불을 LXIUM FireLite 셰이더로 그림 (텍스처 읽기 8 → 4회, 불 비용 약 1/4. 벽·바닥과 닿는 곳의 흐림 없음). Direct3D 11 전용, 다른 API에서는 원본");
             CourtLite = c.Bind("Stage", "CourtLite", true,
                 "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본");
+            CourtCache = c.Bind("Stage", "CourtCache", false,
+                "법정 카메라가 멈춰 있는 동안 바닥·벽·계단의 조명 결과를 한 번만 그려 두고 다시 씀 (CourtLite 필요, D3D11 전용, 분할 화면에서는 꺼짐)");
             Lab = c.Bind("Debug", "RenderLab", false,
                 "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
         }

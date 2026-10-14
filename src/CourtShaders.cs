@@ -33,7 +33,7 @@ namespace LXIUM_mahosaba
             }
 
             // LXIUM 셰이더가 실제로 쓰이는 중인지 (D3D11이 아니면 지원되지 않아 원본 유지)
-            public bool Active => Applied && LiteShader(Lite) != null;
+            public bool Active => Applied && Get(Lite) != null;
         }
 
         internal static readonly Swap Fire = new("SH_Vefects_VFX_URP_Fire_Flames_01", "LXIUM/FireLite");
@@ -59,7 +59,7 @@ namespace LXIUM_mahosaba
             foreach (var s in All)
             {
                 s.Applied = s.On;
-                var want = s.On ? LiteShader(s.Lite) ?? s.OriginalShader : s.OriginalShader;
+                var want = s.On ? Get(s.Lite) ?? s.OriginalShader : s.OriginalShader;
                 if (want == null) continue;
                 foreach (var m in s.Materials)
                 {
@@ -70,7 +70,8 @@ namespace LXIUM_mahosaba
             }
         }
 
-        static Shader LiteShader(string name)
+        // 번들의 LXIUM 셰이더 (지원되는 것만). 처음 부를 때 DLL에 든 번들을 로드
+        internal static Shader Get(string name)
         {
             if (_lite == null)
             {
@@ -114,7 +115,7 @@ namespace LXIUM_mahosaba
         {
             foreach (var r in renderers)
             {
-                var m = r.sharedMaterial;
+                var m = CourtCache.LiveOf(r.sharedMaterial);
                 var shader = m?.shader;
                 if (shader == null) continue;
                 string name = shader.name;
@@ -132,31 +133,7 @@ namespace LXIUM_mahosaba
             }
         }
 
-        static readonly List<Renderer> Hidden = new();
-
-        // 실험실 진단용: 지금 법정의 Lit 재질 렌더러(바닥·계단·벽·단상)를 잠시 끔 → CourtLite가 줄일 수 있는 상한
-        public static int HideCourt(bool hide)
-        {
-            if (!hide)
-            {
-                foreach (var r in Hidden)
-                    if (r != null) r.enabled = true;
-                Hidden.Clear();
-                return 0;
-            }
-            var court = ActiveCourt();
-            if (court == null) return 0;
-            foreach (var r in court.GetComponentsInChildren<Renderer>(false))
-            {
-                var name = r.sharedMaterial?.shader?.name;
-                if (!r.enabled || (name != Court.Original && name != Court.Lite)) continue;
-                r.enabled = false;
-                Hidden.Add(r);
-            }
-            return Hidden.Count;
-        }
-
-        static Court ActiveCourt()
+        internal static Court ActiveCourt()
         {
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Court>()))
             {

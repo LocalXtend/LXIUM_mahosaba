@@ -39,6 +39,7 @@ namespace LXIUM_mahosaba
             if (!_urpApplied) _urpApplied = UrpTuning.Apply();
             CourtShaders.Tick();
             RenderLab.Tick(this);
+            Hud.Tick();
             RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
         }
 
@@ -51,7 +52,10 @@ namespace LXIUM_mahosaba
 
         void OnGUI()
         {
-            if (RenderLab.Status != null) GUI.Box(new Rect(10, 10, 760, 26), RenderLab.Status);
+            long t = Stopwatch.GetTimestamp();
+            if (RenderLab.Status != null && !RenderLab.Capturing) GUI.Box(new Rect(10, 10, 760, 26), RenderLab.Status);
+            Hud.Draw();
+            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
         }
     }
 }

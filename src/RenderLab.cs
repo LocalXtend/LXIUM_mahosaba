@@ -5,10 +5,8 @@ using System.IO;
 using System.Linq;
 using BepInEx;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
-using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering.Universal;
 
 namespace LXIUM_mahosaba
 {
@@ -26,6 +24,9 @@ namespace LXIUM_mahosaba
         internal static long ModTicks;
         static bool _running;
         internal static string Status;
+        // 스크린샷을 찍는 프레임. 화면 패널(Hud)을 숨김
+        internal static bool Capturing;
+        internal static bool Running => _running;
 
         public static void CountCamera() => _cameraRenders++;
 
@@ -48,62 +49,24 @@ namespace LXIUM_mahosaba
                 StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = false;
                 StageRender.ResolutionOverride = 1f;
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
+                CourtCache.On = ActorRender.FastDetect = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
             ("02_noStage", () => StageRender.Freeze = true),
-            // 진단: 법정 바닥·계단·벽·단상을 끔. 01과의 차이 = CourtLite가 줄일 수 있는 상한
-            ("03_courtHidden", () => _courtCount = CourtShaders.HideCourt(true)),
-            ("04_courtLite", () => CourtShaders.Court.On = true),
-            ("05_courtOriginal", () => CourtShaders.Court.On = false),
+            ("03_courtCache", () => CourtCache.On = true),
+            ("04_courtCacheOff", () => CourtCache.On = false),
+            // 예전 변화 감지 (모든 캐릭터를 매 프레임 확인). 01과의 modCpu 차이 = 빠른 감지 효과
+            ("05_fastDetectOff", () => ActorRender.FastDetect = false),
             ("06_current", null),
         };
-
-        static int _courtCount;
-
-        static UniversalAdditionalCameraData _main;
-        static bool _mainPost;
-
-        // 메인 카메라(UI·캐릭터·무대 화면을 그림)의 후처리. 게임 옵션의 "포스트 프로세싱"과 같은 효과
-        static void MainPost(bool off)
-        {
-            if (!off)
-            {
-                if (_main != null) _main.renderPostProcessing = _mainPost;
-                _main = null;
-                return;
-            }
-            _main = Camera.main?.GetComponent<UniversalAdditionalCameraData>();
-            if (_main == null) return;
-            _mainPost = _main.renderPostProcessing;
-            _main.renderPostProcessing = false;
-        }
-
-        static readonly List<Canvas> Hidden = new();
-
-        static void HideUi(bool hide)
-        {
-            if (!hide)
-            {
-                foreach (var c in Hidden)
-                    if (c != null) c.enabled = true;
-                Hidden.Clear();
-                return;
-            }
-            var keep = StageRender.ScreenCanvas;
-            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Canvas>()))
-            {
-                var c = o.Cast<Canvas>();
-                if (!c.isRootCanvas || !c.isActiveAndEnabled || (keep != null && c.Pointer == keep.Pointer)) continue;
-                c.enabled = false;
-                Hidden.Add(c);
-            }
-        }
 
         public static void ApplySettings()
         {
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
+            ActorRender.FastDetect = Settings.FastDetect.Value;
+            CourtCache.On = Settings.CourtCache.Value;
             StageRender.HiddenSkip = Settings.StageHiddenSkip.Value;
             StageRender.MsaaOff = Settings.StageMsaaOff.Value;
             StageRender.PostOff = Settings.StagePostOff.Value;
@@ -113,9 +76,6 @@ namespace LXIUM_mahosaba
             StageRender.CullHidden = true;
             CourtShaders.Fire.On = Settings.FireLite.Value;
             CourtShaders.Court.On = Settings.CourtLite.Value;
-            CourtShaders.HideCourt(false);
-            MainPost(false);
-            HideUi(false);
         }
 
         static IEnumerator Run()
@@ -134,13 +94,13 @@ namespace LXIUM_mahosaba
             {
                 var (name, apply) = Presets[i];
                 ApplySettings();
-                _courtCount = 0;
                 apply?.Invoke();
                 Status = $"LXIUM 렌더 실험 {i + 1}/{Presets.Length} ({name}) — 화면을 그대로 두세요";
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
 
                 times.Clear();
                 long mod = ModTicks;
+                int refreshes = CourtCache.Refreshes;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
                 for (float t = 0; t < Sample; t += Time.unscaledDeltaTime)
@@ -149,19 +109,20 @@ namespace LXIUM_mahosaba
                     yield return null;
                 }
                 int frames = times.Count;
-                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
-                if (_courtCount > 0) extra += $" courtRenderers={_courtCount}";
+                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms cacheRefresh={(float)(CourtCache.Refreshes - refreshes) / frames:F2}";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +
                         $"stageSkip={(float)(StageRender.Skipped - ss) / frames:F2}{extra}");
                 Plugin.L.LogInfo("lab " + log[^1]);
 
-                // 안내 문구 없는 프레임을 찍음
+                // 안내 문구·패널 없는 프레임을 찍음
                 Status = null;
+                Capturing = true;
                 yield return null;
                 yield return new WaitForEndOfFrame();
                 var shot = ScreenCapture.CaptureScreenshotAsTexture();
+                Capturing = false;
                 File.WriteAllBytes(Path.Combine(dir, name + ".jpg"), ImageConversion.EncodeToJPG(shot, 90));
                 UnityEngine.Object.Destroy(shot);
             }

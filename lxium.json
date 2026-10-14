@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "LXIUM_mahosaba",
   "name": "LXIUM mahosaba",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "마법소녀의 마녀재판 렌더링 최적화·프레임 제한 해제 (BepInEx 6 IL2CPP)",
   "game": {
     "id": "mahosaba",

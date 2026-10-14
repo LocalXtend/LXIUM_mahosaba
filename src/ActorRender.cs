@@ -19,6 +19,12 @@ namespace LXIUM_mahosaba
         const float ReferenceHeight = 1440f;
 
         internal static bool ChangeOnly;
+        // 빠른 변화 감지: 최근에 바뀐(hot) 캐릭터만 매 프레임 검사하고, 나머지는 4프레임에 한 번씩 돌아가며 검사.
+        // 놓친 변화가 화면에 남는 시간은 최대 3프레임. 전환 효과가 도는 동안(복사 입력이 바뀐 직후)은 모두 매 프레임 검사
+        internal static bool FastDetect;
+        const float HotTime = 1f;
+        static float _allHotUntil;
+        static int _nextSlot;
         // 안전 갱신은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 1초마다 끊김이 생김 (mahosaba.md 10장 2차)
         static int _layerRefreshFrame = -1, _copyRefreshFrame = -1;
 
@@ -38,12 +44,13 @@ namespace LXIUM_mahosaba
             public GameObject[] Objects;
             public long Hash;
             public IntPtr Texture;
-            public float LastDraw;
+            public float LastDraw, HotUntil;
+            public int Slot;
         }
 
         sealed class CopyState
         {
-            public long Hash;
+            public long Hash, Inputs;
             public float LastDraw;
         }
 
@@ -92,8 +99,19 @@ namespace LXIUM_mahosaba
                     var comps = drawer.transform.GetComponentsInChildren<SpriteRenderer>(true);
                     var objects = new GameObject[comps.Length];
                     for (int i = 0; i < comps.Length; i++) objects[i] = comps[i].gameObject;
-                    __state = new DrawerState { Renderers = comps, Objects = objects };
+                    __state = new DrawerState { Renderers = comps, Objects = objects, Slot = _nextSlot++ & 3 };
                     Drawers[key] = __state;
+                }
+                float now = Time.unscaledTime;
+                bool due = now - __state.LastDraw >= RefreshInterval;
+                // 식은 캐릭터는 자기 차례(4프레임에 한 번)가 아니면 해시 없이 지난 그림을 씀
+                if (ChangeOnly && FastDetect && !due && now >= __state.HotUntil && now >= _allHotUntil
+                    && renderTexture != null && renderTexture.Pointer == __state.Texture
+                    && ((Time.frameCount + __state.Slot) & 3) != 0)
+                {
+                    LayerSkips++;
+                    __result = renderTexture;
+                    return false;
                 }
                 long hash;
                 // 프리팹 렌더러가 파괴됐는데 ClearLayers를 거치지 않은 경우: 상태를 버리고 원래대로 그림
@@ -106,7 +124,7 @@ namespace LXIUM_mahosaba
                     return true;
                 }
                 bool same = hash == __state.Hash && renderTexture != null && renderTexture.Pointer == __state.Texture;
-                bool due = Time.unscaledTime - __state.LastDraw >= RefreshInterval;
+                if (!same) __state.HotUntil = now + HotTime;
                 if (ChangeOnly && same && (!due || !TakeRefreshSlot(ref _layerRefreshFrame)))
                 {
                     LayerSkips++;
@@ -162,26 +180,25 @@ namespace LXIUM_mahosaba
                 var main = renderer.MainTexture;
                 if (main == null) return true;
 
-                long h;
+                int version = 0;
                 var mainRt = main.TryCast<RenderTexture>();
-                if (mainRt != null)
-                {
-                    // 출처를 모르는 RT(DicedSprite·영상 등)는 내용 변화를 알 수 없으므로 항상 그림
-                    if (!TextureVersions.TryGetValue(mainRt.Pointer, out int version)) { CopyDraws++; return true; }
-                    h = mainRt.Pointer.ToInt64() * 31 + version;
-                }
-                else h = main.Pointer.ToInt64();
+                // 출처를 모르는 RT(DicedSprite·영상 등)는 내용 변화를 알 수 없으므로 항상 그림
+                if (mainRt != null && !TextureVersions.TryGetValue(mainRt.Pointer, out version)) { CopyDraws++; return true; }
 
+                // 내용 버전을 뺀 입력 (전환·색·대상). 이것이 바뀌면 연출이 시작된 것
                 var tint = renderer.TintColor;
+                long h = main.Pointer.ToInt64();
                 h = h * 31 + texture.Pointer.ToInt64();
                 h = h * 31 + (renderer.TransitionTexture?.Pointer.ToInt64() ?? 0);
                 h = h * 31 + BitConverter.SingleToInt32Bits(renderer.TransitionProgress);
                 h = h * 31 + BitConverter.SingleToInt32Bits(renderer.BlurIntensity);
                 h = h * 31 + HashCode.Combine(tint.r, tint.g, tint.b, tint.a);
                 h = h * 31 + (renderer.FlipX ? 1 : 0) + (renderer.FlipY ? 2 : 0);
+                long inputs = h;
+                h = h * 31 + version;
 
                 var key = renderer.Pointer;
-                if (!Copies.TryGetValue(key, out var s)) Copies[key] = s = new CopyState { Hash = h - 1 };
+                if (!Copies.TryGetValue(key, out var s)) Copies[key] = s = new CopyState { Hash = h - 1, Inputs = inputs };
                 float now = Time.unscaledTime;
                 bool due = now - s.LastDraw >= RefreshInterval;
                 if (s.Hash == h && (!due || !TakeRefreshSlot(ref _copyRefreshFrame)))
@@ -189,6 +206,10 @@ namespace LXIUM_mahosaba
                     CopySkips++;
                     return false;
                 }
+                // 전환·색 변화가 시작됨 → 레이어 캐릭터를 잠시 모두 매 프레임 검사.
+                // 내용 버전만 바뀐 경우(1초 안전 갱신 포함)는 해당 없음
+                if (s.Inputs != inputs) _allHotUntil = now + HotTime;
+                s.Inputs = inputs;
                 s.Hash = h;
                 s.LastDraw = now;
                 CopyDraws++;
