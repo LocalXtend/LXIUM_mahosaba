@@ -22,6 +22,9 @@ namespace LXIUM_mahosaba
             internal bool Applied;
             internal Shader OriginalShader;
             internal readonly List<Material> Materials = new();
+            // 원본 셰이더일 때의 렌더 큐. Material.shader를 바꾸면 Unity가 큐를 셰이더 기본값(Lit은 2000)으로
+            // 되돌려, 투명 단상(3000)이 불투명 순서에 그려지고 뒤의 벽에 덮여 사라짐 → 바꿀 때마다 다시 넣음
+            internal readonly Dictionary<IntPtr, int> Queues = new();
 
             public Swap(string original, string lite)
             {
@@ -59,7 +62,11 @@ namespace LXIUM_mahosaba
                 var want = s.On ? LiteShader(s.Lite) ?? s.OriginalShader : s.OriginalShader;
                 if (want == null) continue;
                 foreach (var m in s.Materials)
-                    if (m != null && m.shader != want) m.shader = want;
+                {
+                    if (m == null || m.shader == want) continue;
+                    m.shader = want;
+                    if (s.Queues.TryGetValue(m.Pointer, out int queue)) m.renderQueue = queue;
+                }
             }
         }
 
@@ -113,7 +120,11 @@ namespace LXIUM_mahosaba
                 string name = shader.name;
                 foreach (var s in All)
                 {
-                    if (name == s.Original) s.OriginalShader = shader;
+                    if (name == s.Original)
+                    {
+                        s.OriginalShader = shader;
+                        s.Queues[m.Pointer] = m.renderQueue;
+                    }
                     else if (name != s.Lite) continue;
                     if (!s.Materials.Exists(x => x.Pointer == m.Pointer)) s.Materials.Add(m);
                     break;
