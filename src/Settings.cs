@@ -29,12 +29,12 @@ namespace LXIUM_mahosaba
                 "레이어 캐릭터를 바뀐 프레임에만 다시 합성. 게임은 표정이 그대로여도 매 프레임 카메라 렌더를 함");
             CharacterResolution = c.Bind("Character", "Resolution", 0f,
                 "레이어 캐릭터 합성 해상도 배율. 0 = 화면 해상도에 맞춤(1080p에서 0.75), 1 = 원래(100 PPU)");
-            StageResolution = c.Bind("Stage", "Resolution", 1f,
-                "재판 3D 무대 렌더 텍스처 배율 (원래 1920x1080 고정). 1 = 원래");
+            StageResolution = c.Bind("Stage", "Resolution", 0f,
+                "재판 3D 무대 렌더 텍스처 배율 (원래 1920x1080 고정). 0 = 화면 높이에 맞춤(1080 이상이면 원래 크기), 1 = 원래");
             StageHiddenSkip = c.Bind("Stage", "HiddenSkip", true,
                 "화면에 보이지 않는 무대 카메라는 그리지 않음");
             Lab = c.Bind("Debug", "RenderLab", false,
-                "렌더 실험실: 캐릭터가 10초 이상 보이면 설정 조합을 8초씩 바꿔 가며 프레임 통계를 BepInEx/LXIUM_mahosaba 폴더에 기록");
+                "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
         }
     }
 

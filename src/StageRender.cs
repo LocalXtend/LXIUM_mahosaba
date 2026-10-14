@@ -15,6 +15,8 @@ namespace LXIUM_mahosaba
         public static bool IsStageCamera(Camera cam) => !cam.orthographic;
 
         internal static bool HiddenSkip;
+        // 실험실이 측정 동안 덮어쓰는 배율. null이면 설정값 사용
+        internal static float? ResolutionOverride;
         internal static int Skipped;
 
         // 게임이 무대 카메라를 켜고 끈 마지막 값. 한 번도 못 봤으면(null) 카메라를 건드리지 않음
@@ -22,7 +24,6 @@ namespace LXIUM_mahosaba
         static StageScreenController _screens;
         static Camera[] _cameras;
         static RawImage[] _images;
-        static bool _resized;
 
         [HarmonyPatch(typeof(StageCameraController), "SetCameraEnabled")]
         static class SetCameraEnabledPatch
@@ -60,7 +61,7 @@ namespace LXIUM_mahosaba
         public static void LateTick()
         {
             if (!Find()) return;
-            if (!_resized) _resized = Resize(Settings.StageResolution.Value);
+            Resize();
             if (_presented is not bool presented) return;
             for (int i = 0; i < _cameras.Length; i++)
             {
@@ -75,22 +76,24 @@ namespace LXIUM_mahosaba
         static bool Visible(RawImage img) =>
             img != null && img.isActiveAndEnabled && img.canvasRenderer.GetInheritedAlpha() > 0.001f;
 
+        // 원래 RT는 화면 해상도와 무관하게 1920x1080. RawImage가 화면 크기로 보여 주므로
+        // 화면보다 큰 RT는 낭비다. 0 = 화면 높이에 맞춤(1080 이상이면 원래 크기). 해상도를 바꾸면 따라감.
         // RT 크기만 바꾸면 RawImage가 늘려 보여 주므로 화면 배치는 그대로
-        static bool Resize(float scale)
+        static void Resize()
         {
-            if (scale >= 1f || scale <= 0f) return true;
+            float scale = ResolutionOverride ?? Settings.StageResolution.Value;
+            if (scale <= 0f) scale = Screen.height / 1080f;
+            scale = Mathf.Min(scale, 1f);
+            int w = Mathf.RoundToInt(1920 * scale), h = Mathf.RoundToInt(1080 * scale);
             foreach (var cam in _cameras)
             {
                 var rt = cam?.targetTexture;
-                if (rt == null) return false;
-                int w = Mathf.RoundToInt(1920 * scale), h = Mathf.RoundToInt(1080 * scale);
-                if (rt.width == w) continue;
+                if (rt == null || rt.width == w) continue;
                 rt.Release();
                 rt.width = w;
                 rt.height = h;
+                Plugin.L.LogInfo($"stage rt {w}x{h}");
             }
-            Plugin.L.LogInfo($"stage rt scale {scale}");
-            return true;
         }
     }
 }

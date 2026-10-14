@@ -38,6 +38,8 @@ namespace LXIUM_mahosaba
             public string Name;
             public bool Msaa, Intermediate, ChangeOnly, HiddenSkip;
             public SsaoMode Ssao;
+            // 무대 RT 배율: 1 = 원래 1920x1080, 0 = 화면 맞춤
+            public float StageResolution = 1f;
         }
 
         // 앞 단계에 하나씩 더함. 0번이 게임 원래 상태
@@ -49,6 +51,7 @@ namespace LXIUM_mahosaba
             new() { Name = "3_intermediate", Msaa = true, Ssao = SsaoMode.StageOnly, Intermediate = true },
             new() { Name = "4_changeOnly", Msaa = true, Ssao = SsaoMode.StageOnly, Intermediate = true, ChangeOnly = true },
             new() { Name = "5_hiddenSkip", Msaa = true, Ssao = SsaoMode.StageOnly, Intermediate = true, ChangeOnly = true, HiddenSkip = true },
+            new() { Name = "6_stageRes", Msaa = true, Ssao = SsaoMode.StageOnly, Intermediate = true, ChangeOnly = true, HiddenSkip = true, StageResolution = 0f },
         };
 
         static void Apply(Preset p)
@@ -56,6 +59,7 @@ namespace LXIUM_mahosaba
             UrpTuning.Set(p.Msaa, p.Ssao, p.Intermediate);
             ActorRender.ChangeOnly = p.ChangeOnly;
             StageRender.HiddenSkip = p.HiddenSkip;
+            StageRender.ResolutionOverride = p.StageResolution;
         }
 
         public static void ApplySettings()
@@ -63,6 +67,7 @@ namespace LXIUM_mahosaba
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
             StageRender.HiddenSkip = Settings.StageHiddenSkip.Value;
+            StageRender.ResolutionOverride = null;
         }
 
         static IEnumerator Run()
@@ -72,7 +77,7 @@ namespace LXIUM_mahosaba
             var log = new List<string>
             {
                 $"screen={Screen.width}x{Screen.height} {Screen.fullScreenMode} gfx={SystemInfo.graphicsDeviceType} ({SystemInfo.graphicsDeviceName}) quality={QualitySettings.GetQualityLevel()}",
-                $"characterResolution={Settings.CharacterResolution.Value} stageResolution={Settings.StageResolution.Value}",
+                $"characterResolution={Settings.CharacterResolution.Value} (실험 중 고정)",
             };
             FrameRate.Override = -1;
             var times = new List<float>(4096);

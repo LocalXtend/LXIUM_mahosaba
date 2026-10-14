@@ -18,6 +18,16 @@ namespace LXIUM_mahosaba
         const float ReferenceHeight = 1440f;
 
         internal static bool ChangeOnly;
+        // 안전 갱신은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 1초마다 끊김이 생김 (mahosaba.md 10장 2차)
+        static int _layerRefreshFrame = -1, _copyRefreshFrame = -1;
+
+        static bool TakeRefreshSlot(ref int lastFrame)
+        {
+            int frame = Time.frameCount;
+            if (lastFrame == frame) return false;
+            lastFrame = frame;
+            return true;
+        }
         internal static int LayerDraws, LayerSkips, CopyDraws, CopySkips;
 
         sealed class DrawerState
@@ -82,7 +92,8 @@ namespace LXIUM_mahosaba
                     return true;
                 }
                 bool same = hash == __state.Hash && renderTexture != null && renderTexture.Pointer == __state.Texture;
-                if (ChangeOnly && same && Time.unscaledTime - __state.LastDraw < RefreshInterval)
+                bool due = Time.unscaledTime - __state.LastDraw >= RefreshInterval;
+                if (ChangeOnly && same && (!due || !TakeRefreshSlot(ref _layerRefreshFrame)))
                 {
                     LayerSkips++;
                     __result = renderTexture;
@@ -156,7 +167,8 @@ namespace LXIUM_mahosaba
                 var key = renderer.Pointer;
                 if (!Copies.TryGetValue(key, out var s)) Copies[key] = s = new CopyState { Hash = h - 1 };
                 float now = Time.unscaledTime;
-                if (s.Hash == h && now - s.LastDraw < RefreshInterval)
+                bool due = now - s.LastDraw >= RefreshInterval;
+                if (s.Hash == h && (!due || !TakeRefreshSlot(ref _copyRefreshFrame)))
                 {
                     CopySkips++;
                     return false;
