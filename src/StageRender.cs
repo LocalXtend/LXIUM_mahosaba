@@ -1,6 +1,7 @@
 using HarmonyLib;
 using Il2CppInterop.Runtime;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 using WitchTrials.Views;
 
@@ -14,7 +15,8 @@ namespace LXIUM_mahosaba
         // 재판 무대 카메라만 원근 카메라. 메인·캐릭터 합성 카메라는 모두 직교
         public static bool IsStageCamera(Camera cam) => !cam.orthographic;
 
-        internal static bool HiddenSkip;
+        // 설정·실험실이 정하는 값
+        internal static bool HiddenSkip, MsaaOff, PostOff, HalfRate, NeedDepth;
         // 실험실이 측정 동안 덮어쓰는 배율. null이면 설정값 사용
         internal static float? ResolutionOverride;
         internal static int Skipped;
@@ -24,6 +26,13 @@ namespace LXIUM_mahosaba
         static StageScreenController _screens;
         static Camera[] _cameras;
         static RawImage[] _images;
+        static UniversalAdditionalCameraData[] _data;
+        static bool[] _origPost;
+        static CameraOverrideOption[] _origDepth;
+        static int _origAa;
+        static Vector3[] _lastPos;
+        static Quaternion[] _lastRot;
+        static float[] _lastFov;
 
         [HarmonyPatch(typeof(StageCameraController), "SetCameraEnabled")]
         static class SetCameraEnabledPatch
@@ -47,13 +56,24 @@ namespace LXIUM_mahosaba
             int n = Mathf.Min(cams.Length, scrs.Length);
             _cameras = new Camera[n];
             _images = new RawImage[n];
+            _data = new UniversalAdditionalCameraData[n];
+            _origPost = new bool[n];
+            _origDepth = new CameraOverrideOption[n];
+            _lastPos = new Vector3[n];
+            _lastRot = new Quaternion[n];
+            _lastFov = new float[n];
             for (int i = 0; i < n; i++)
             {
                 _cameras[i] = cams[i]._camera;
                 _images[i] = scrs[i].GetComponentInChildren<RawImage>(true);
+                _data[i] = _cameras[i]?.GetComponent<UniversalAdditionalCameraData>();
+                if (_data[i] == null) continue;
+                _origPost[i] = _data[i].renderPostProcessing;
+                _origDepth[i] = _data[i].requiresDepthOption;
             }
             var rt = n > 0 ? _cameras[0]?.targetTexture : null;
-            Plugin.L.LogInfo($"stage cameras={n} rt={rt?.width}x{rt?.height}");
+            _origAa = rt != null ? rt.antiAliasing : 1;
+            Plugin.L.LogInfo($"stage cameras={n} rt={rt?.width}x{rt?.height} msaa={_origAa} post={(n > 0 && _origPost[0])}");
             return true;
         }
 
@@ -62,12 +82,16 @@ namespace LXIUM_mahosaba
         {
             if (!Find()) return;
             Resize();
+            ApplyCameraData();
             if (_presented is not bool presented) return;
             for (int i = 0; i < _cameras.Length; i++)
             {
                 var cam = _cameras[i];
                 if (cam == null) continue;
                 bool want = presented && (!HiddenSkip || Visible(_images[i]));
+                // 반 프레임: 카메라가 멈춰 있으면 두 프레임에 한 번만 그리고 그 사이에는 RT의 지난 그림을 그대로 보여 줌.
+                // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림
+                if (want && HalfRate && !Moved(i, cam) && ((Time.frameCount + i) & 1) == 1) want = false;
                 if (cam.enabled != want) cam.enabled = want;
                 if (presented && !want) Skipped++;
             }
@@ -76,23 +100,53 @@ namespace LXIUM_mahosaba
         static bool Visible(RawImage img) =>
             img != null && img.isActiveAndEnabled && img.canvasRenderer.GetInheritedAlpha() > 0.001f;
 
+        static bool Moved(int i, Camera cam)
+        {
+            var tr = cam.transform;
+            Vector3 p = tr.position;
+            Quaternion q = tr.rotation;
+            float fov = cam.fieldOfView;
+            bool moved = p != _lastPos[i] || q != _lastRot[i] || fov != _lastFov[i];
+            _lastPos[i] = p;
+            _lastRot[i] = q;
+            _lastFov[i] = fov;
+            return moved;
+        }
+
+        // 후처리: 볼륨 효과가 모두 0이라 무대 카메라의 후처리는 LUT 만들기 + FXAA뿐이고, 메인 카메라가 화면 전체에
+        // FXAA를 한 번 더 함. 깊이: SSAO를 끄면 원본 불 셰이더가 읽을 깊이 텍스처를 따로 요청
+        static void ApplyCameraData()
+        {
+            for (int i = 0; i < _data.Length; i++)
+            {
+                var d = _data[i];
+                if (d == null) continue;
+                bool post = _origPost[i] && !PostOff;
+                if (d.renderPostProcessing != post) d.renderPostProcessing = post;
+                var depth = NeedDepth ? CameraOverrideOption.On : _origDepth[i];
+                if (d.requiresDepthOption != depth) d.requiresDepthOption = depth;
+            }
+        }
+
         // 원래 RT는 화면 해상도와 무관하게 1920x1080. RawImage가 화면 크기로 보여 주므로
         // 화면보다 큰 RT는 낭비다. 0 = 화면 높이에 맞춤(1080 이상이면 원래 크기). 해상도를 바꾸면 따라감.
-        // RT 크기만 바꾸면 RawImage가 늘려 보여 주므로 화면 배치는 그대로
+        // RT 크기만 바꾸면 RawImage가 늘려 보여 주므로 화면 배치는 그대로. MSAA를 끄면 FXAA만 남음
         static void Resize()
         {
             float scale = ResolutionOverride ?? Settings.StageResolution.Value;
             if (scale <= 0f) scale = Screen.height / 1080f;
             scale = Mathf.Min(scale, 1f);
             int w = Mathf.RoundToInt(1920 * scale), h = Mathf.RoundToInt(1080 * scale);
+            int aa = MsaaOff ? 1 : _origAa;
             foreach (var cam in _cameras)
             {
                 var rt = cam?.targetTexture;
-                if (rt == null || rt.width == w) continue;
+                if (rt == null || (rt.width == w && rt.antiAliasing == aa)) continue;
                 rt.Release();
                 rt.width = w;
                 rt.height = h;
-                Plugin.L.LogInfo($"stage rt {w}x{h}");
+                rt.antiAliasing = aa;
+                Plugin.L.LogInfo($"stage rt {w}x{h} msaa={aa}");
             }
         }
     }

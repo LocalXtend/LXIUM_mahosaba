@@ -27,6 +27,7 @@
     <Reference Include="$(InteropDir)\Il2Cppmscorlib.dll" Private="false" />
     <Reference Include="$(InteropDir)\Il2CppSystem.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.AssetBundleModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.UIModule.dll" Private="false" />
@@ -37,6 +38,11 @@
     <Reference Include="$(InteropDir)\Unity.RenderPipelines.Universal.Runtime.dll" Private="false" />
     <Reference Include="$(InteropDir)\Elringus.Naninovel.Runtime.dll" Private="false" />
     <Reference Include="$(InteropDir)\Assembly-CSharp.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- shaders/build_firelite.py로 만든 FireLite 셰이더 번들. DLL에 넣어 파일 하나로 배포 -->
+  <ItemGroup>
+    <EmbeddedResource Include="res\lxium_mahosaba.bundle" LogicalName="lxium_mahosaba.bundle" />
   </ItemGroup>
 
   <!-- docs/ai/addon.md 7장: lxium.json의 version은 ver.txt와 같아야 함 -->

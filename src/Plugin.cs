@@ -35,6 +35,7 @@ namespace LXIUM_mahosaba
         {
             FrameRate.Enforce();
             if (!_urpApplied) _urpApplied = UrpTuning.Apply();
+            FireRender.Tick();
             RenderLab.Tick(this);
         }
 

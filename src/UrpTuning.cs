@@ -9,29 +9,43 @@ namespace LXIUM_mahosaba
     // 에셋은 하나뿐이고 품질 단계별 교체가 없으므로 한 번 찾으면 유지됨.
     static class UrpTuning
     {
+        static UniversalRenderPipelineAsset _asset;
         static UniversalRendererData _data;
         static ScriptableRendererFeature _ssao;
+        static ScreenSpaceAmbientOcclusionSettings _ssaoSettings;
         static IntermediateTextureMode _origIntermediate;
+        static bool _origDownsample;
+        static ScreenSpaceAmbientOcclusionSettings.AOSampleOption _origSamples;
+        static ScreenSpaceAmbientOcclusionSettings.BlurQualityOptions _origBlur;
+        static bool _primingTouched;
 
         // 실험실이 바꾸는 현재 상태
-        internal static bool MsaaOff, IntermediateAuto;
+        internal static bool MsaaOff, IntermediateAuto, DepthPriming;
         internal static SsaoMode Ssao;
 
         public static bool Apply()
         {
-            var asset = GraphicsSettings.currentRenderPipeline?.TryCast<UniversalRenderPipelineAsset>();
-            if (asset == null) return false;
-            _data = asset.scriptableRendererData?.TryCast<UniversalRendererData>();
+            _asset = GraphicsSettings.currentRenderPipeline?.TryCast<UniversalRenderPipelineAsset>();
+            if (_asset == null) return false;
+            _data = _asset.scriptableRendererData?.TryCast<UniversalRendererData>();
             if (_data != null)
             {
                 _origIntermediate = _data.m_IntermediateTextureMode;
                 var features = _data.rendererFeatures;
                 for (int i = 0; i < features.Count; i++)
-                    if (features[i].TryCast<ScreenSpaceAmbientOcclusion>() != null) _ssao = features[i];
+                {
+                    var ao = features[i].TryCast<ScreenSpaceAmbientOcclusion>();
+                    if (ao == null) continue;
+                    _ssao = features[i];
+                    _ssaoSettings = ao.m_Settings;
+                    _origDownsample = _ssaoSettings.Downsample;
+                    _origSamples = _ssaoSettings.Samples;
+                    _origBlur = _ssaoSettings.BlurQuality;
+                }
             }
             RenderPipelineManager.add_beginCameraRendering((Action<ScriptableRenderContext, Camera>)OnBeginCamera);
-            Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
-            Plugin.L.LogInfo($"urp asset={asset.name} msaa={asset.msaaSampleCount} intermediate={_origIntermediate} ssao={_ssao != null}");
+            RenderLab.ApplySettings();
+            Plugin.L.LogInfo($"urp asset={_asset.name} msaa={_asset.msaaSampleCount} intermediate={_origIntermediate} ssao={_ssao != null}");
             return true;
         }
 
@@ -40,6 +54,16 @@ namespace LXIUM_mahosaba
             MsaaOff = msaaOff;
             Ssao = ssao;
             IntermediateAuto = intermediateAuto;
+            // SSAO가 없으면 무대 카메라에 깊이 텍스처가 안 생기는데, 원본 불 셰이더는 깊이를 읽음
+            StageRender.NeedDepth = ssao == SsaoMode.Off;
+            if (_ssaoSettings != null)
+            {
+                // 가볍게: 절반 해상도, 샘플·블러 Low. 법정 구석 음영이 조금 부드러워짐
+                bool lite = ssao == SsaoMode.StageLite;
+                _ssaoSettings.Downsample = lite || _origDownsample;
+                _ssaoSettings.Samples = lite ? ScreenSpaceAmbientOcclusionSettings.AOSampleOption.Low : _origSamples;
+                _ssaoSettings.BlurQuality = lite ? ScreenSpaceAmbientOcclusionSettings.BlurQualityOptions.Low : _origBlur;
+            }
             if (_data == null) return;
             var mode = intermediateAuto ? IntermediateTextureMode.Auto : _origIntermediate;
             if (_data.m_IntermediateTextureMode == mode) return;
@@ -48,15 +72,28 @@ namespace LXIUM_mahosaba
         }
 
         // URP는 카메라마다 렌더 직전에 beginCameraRendering을 부른 뒤 카메라 데이터(MSAA 등)를 만들고
-        // 기능 목록의 isActive를 본다. 그래서 여기서 카메라별로 MSAA·SSAO를 정한다.
-        // - MSAA: 직교 카메라(메인·캐릭터 합성)만 끔. 무대 카메라는 RT의 MSAA 2x를 그대로 씀
+        // 기능 목록의 isActive와 렌더러 설정을 본다. 그래서 여기서 카메라별로 정한다.
+        // - MSAA: 직교 카메라(메인·캐릭터 합성)만 끔. 무대 카메라는 RT의 MSAA를 따름
         // - SSAO: 렌더러 단위 기능이라 카메라별 설정이 없어 켜고 끄기를 카메라마다 바꿈
+        // - 깊이 프라이밍: SSAO가 이미 만든 깊이로 불투명 패스의 겹쳐 그리기를 없앰. 데스크톱에서는 Auto도
+        //   모든 카메라에 깊이 프리패스를 더하므로 무대 카메라에만 켬. MSAA가 켜진 RT에서는 URP가 쓰지 않음
         static void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
             RenderLab.CountCamera();
+            bool stage = StageRender.IsStageCamera(cam);
             if (cam.orthographic && cam.allowMSAA == MsaaOff) cam.allowMSAA = !MsaaOff;
+            if (DepthPriming || _primingTouched)
+            {
+                var renderer = _asset.scriptableRenderer?.TryCast<UniversalRenderer>();
+                if (renderer != null)
+                {
+                    var mode = DepthPriming && stage ? DepthPrimingMode.Forced : _data.m_DepthPrimingMode;
+                    if (renderer.depthPrimingMode != mode) renderer.depthPrimingMode = mode;
+                    _primingTouched = DepthPriming;
+                }
+            }
             if (_ssao == null) return;
-            bool active = Ssao == SsaoMode.Game || (Ssao == SsaoMode.StageOnly && StageRender.IsStageCamera(cam));
+            bool active = Ssao == SsaoMode.Game || (stage && Ssao is SsaoMode.StageOnly or SsaoMode.StageLite);
             if (_ssao.isActive != active) _ssao.SetActive(active);
         }
     }
