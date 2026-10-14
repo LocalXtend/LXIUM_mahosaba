@@ -19,6 +19,8 @@ namespace LXIUM_mahosaba
         internal static bool HiddenSkip, MsaaOff, PostOff, HalfRate;
         // 실험실 진단용: 무대 카메라를 모두 멈춰(RT는 마지막 그림 유지) 메인 카메라·UI·캐릭터만의 비용을 잼
         internal static bool Freeze;
+        // HiddenSkip과 함께: 안 보이는(알파 0) 무대 화면 RawImage도 그리지 않음. 실험실이 끄고 비교함
+        internal static bool CullHidden = true;
         // 실험실이 측정 동안 덮어쓰는 배율. null이면 설정값 사용
         internal static float? ResolutionOverride;
         internal static int Skipped;
@@ -91,7 +93,12 @@ namespace LXIUM_mahosaba
             {
                 var cam = _cameras[i];
                 if (cam == null) continue;
-                bool want = presented && !Freeze && (!HiddenSkip || Visible(_images[i]));
+                bool visible = Visible(_images[i]);
+                bool want = presented && !Freeze && (!HiddenSkip || visible);
+                // CanvasGroup 알파가 0이어도 UI는 화면 전체 크기 투명 사각형을 그대로 그림 → 그리기 목록에서 뺌
+                var cr = _images[i]?.canvasRenderer;
+                bool cull = HiddenSkip && CullHidden && !visible;
+                if (cr != null && cr.cull != cull) cr.cull = cull;
                 // 반 프레임: 카메라가 멈춰 있으면 두 프레임에 한 번만 그리고 그 사이에는 RT의 지난 그림을 그대로 보여 줌.
                 // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림
                 if (want && HalfRate && !Moved(i, cam) && ((Time.frameCount + i) & 1) == 1) want = false;

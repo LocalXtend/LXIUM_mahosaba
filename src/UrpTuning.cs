@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -73,11 +74,15 @@ namespace LXIUM_mahosaba
         // - SSAO: 렌더러 단위 기능이라 카메라별 설정이 없어 켜고 끄기를 카메라마다 바꿈
         static void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
+            long t = Stopwatch.GetTimestamp();
             RenderLab.CountCamera();
             if (cam.orthographic && cam.allowMSAA == MsaaOff) cam.allowMSAA = !MsaaOff;
-            if (_ssao == null) return;
-            bool active = Ssao == SsaoMode.Game || (StageRender.IsStageCamera(cam) && Ssao is SsaoMode.StageOnly or SsaoMode.StageLite);
-            if (_ssao.isActive != active) _ssao.SetActive(active);
+            if (_ssao != null)
+            {
+                bool active = Ssao == SsaoMode.Game || (StageRender.IsStageCamera(cam) && Ssao is SsaoMode.StageOnly or SsaoMode.StageLite);
+                if (_ssao.isActive != active) _ssao.SetActive(active);
+            }
+            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
         }
     }
 }

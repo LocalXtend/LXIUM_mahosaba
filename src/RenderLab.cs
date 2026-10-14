@@ -22,6 +22,8 @@ namespace LXIUM_mahosaba
         static readonly string Dir = Path.Combine(Paths.BepInExRootPath, "LXIUM_mahosaba");
 
         static int _cameraRenders;
+        // 모드가 매 프레임 쓰는 메인 스레드 시간 (패치·Host·카메라 콜백). Stopwatch 틱
+        internal static long ModTicks;
         static bool _running;
         internal static string Status;
 
@@ -52,17 +54,14 @@ namespace LXIUM_mahosaba
             ("02_noStage", () => StageRender.Freeze = true),
             // 진단: 무대 화면을 뺀 UI 캔버스를 숨김. 01과의 차이 = UI(대사창·메뉴·글자·그림자) 비용
             ("03_noUI", () => HideUi(true)),
-            ("04_ssaoLite", () => SetSsao(SsaoMode.StageLite)),
-            ("05_ssaoFull", () => SetSsao(SsaoMode.StageOnly)),
-            ("06_stageHalfRate", () => StageRender.HalfRate = true),
-            ("07_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
-            ("08_mainPostOff", () => MainPost(true)),
-            ("09_fireOn", () => Fire(Settings.FireLite.Value)),
-            ("10_fireOriginal", () => Fire(false)),
-            ("11_current", null),
+            // 안 보이는 무대 화면 컬링을 끔 (0.2.3 이전 동작). 01과의 차이 = 컬링 효과
+            ("04_screenCullOff", () => StageRender.CullHidden = false),
+            ("05_stageHalfRate", () => StageRender.HalfRate = true),
+            ("06_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
+            ("07_mainPostOff", () => MainPost(true)),
+            ("08_fireOn", () => Fire(Settings.FireLite.Value)),
+            ("09_current", null),
         };
-
-        static void SetSsao(SsaoMode mode) => UrpTuning.Set(UrpTuning.MsaaOff, mode, UrpTuning.IntermediateAuto);
 
         static int _fireCount;
         static void Fire(bool lite)
@@ -120,6 +119,7 @@ namespace LXIUM_mahosaba
             StageRender.HalfRate = Settings.StageHalfRate.Value;
             StageRender.ResolutionOverride = null;
             StageRender.Freeze = false;
+            StageRender.CullHidden = true;
             FireRender.Lite = Settings.FireLite.Value;
             FireRender.ForceFire(false);
             MainPost(false);
@@ -148,6 +148,7 @@ namespace LXIUM_mahosaba
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
 
                 times.Clear();
+                long mod = ModTicks;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
                 for (float t = 0; t < Sample; t += Time.unscaledDeltaTime)
@@ -156,7 +157,8 @@ namespace LXIUM_mahosaba
                     yield return null;
                 }
                 int frames = times.Count;
-                string extra = _fireCount > 0 ? $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}" : "";
+                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
+                if (_fireCount > 0) extra += $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +

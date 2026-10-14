@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
@@ -33,13 +34,20 @@ namespace LXIUM_mahosaba
 
         void Update()
         {
+            long t = Stopwatch.GetTimestamp();
             FrameRate.Enforce();
             if (!_urpApplied) _urpApplied = UrpTuning.Apply();
             FireRender.Tick();
             RenderLab.Tick(this);
+            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
         }
 
-        void LateUpdate() => StageRender.LateTick();
+        void LateUpdate()
+        {
+            long t = Stopwatch.GetTimestamp();
+            StageRender.LateTick();
+            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
+        }
 
         void OnGUI()
         {

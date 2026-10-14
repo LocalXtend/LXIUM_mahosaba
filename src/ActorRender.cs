@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using HarmonyLib;
 using Naninovel;
 using UnityEngine;
@@ -33,6 +34,8 @@ namespace LXIUM_mahosaba
         sealed class DrawerState
         {
             public SpriteRenderer[] Renderers;
+            // 렌더러마다 gameObject를 매 프레임 꺼내면 interop 래퍼가 새로 만들어지므로 한 번만 꺼내 둠
+            public GameObject[] Objects;
             public long Hash;
             public IntPtr Texture;
             public float LastDraw;
@@ -52,18 +55,20 @@ namespace LXIUM_mahosaba
 
         // 레이어 상태 해시. 이 게임의 캐릭터 프리팹에는 Animator가 없고 표정·포즈는
         // 렌더러 켜고 끄기, 스프라이트·색·재질·레이어 교체로만 바뀐다 (docs/ai/mahosaba.md 5.2)
-        static long LayerHash(SpriteRenderer[] renderers, float ppu)
+        static long LayerHash(DrawerState s, float ppu)
         {
             long h = BitConverter.SingleToInt32Bits(ppu);
-            foreach (var r in renderers)
+            for (int i = 0; i < s.Renderers.Length; i++)
             {
-                bool on = r.enabled && r.gameObject.activeInHierarchy;
+                var r = s.Renderers[i];
+                var go = s.Objects[i];
+                bool on = go.activeInHierarchy && r.enabled;
                 h = h * 31 + (on ? 1 : 0);
                 if (!on) continue;
                 var c = r.color;
                 h = h * 31 + (r.sprite?.Pointer.ToInt64() ?? 0);
                 h = h * 31 + (r.sharedMaterial?.Pointer.ToInt64() ?? 0);
-                h = h * 31 + r.gameObject.layer;
+                h = h * 31 + go.layer;
                 h = h * 31 + HashCode.Combine(c.r, c.g, c.b, c.a);
             }
             return h;
@@ -74,16 +79,25 @@ namespace LXIUM_mahosaba
         {
             static bool Prefix(LayeredDrawer __instance, float pixelsPerUnit, RenderTexture renderTexture, ref RenderTexture __result, out DrawerState __state)
             {
-                var key = __instance.Pointer;
+                long t = Stopwatch.GetTimestamp();
+                try { return Run(__instance, pixelsPerUnit, renderTexture, ref __result, out __state); }
+                finally { RenderLab.ModTicks += Stopwatch.GetTimestamp() - t; }
+            }
+
+            static bool Run(LayeredDrawer drawer, float pixelsPerUnit, RenderTexture renderTexture, ref RenderTexture __result, out DrawerState __state)
+            {
+                var key = drawer.Pointer;
                 if (!Drawers.TryGetValue(key, out __state))
                 {
-                    var comps = __instance.transform.GetComponentsInChildren<SpriteRenderer>(true);
-                    __state = new DrawerState { Renderers = comps };
+                    var comps = drawer.transform.GetComponentsInChildren<SpriteRenderer>(true);
+                    var objects = new GameObject[comps.Length];
+                    for (int i = 0; i < comps.Length; i++) objects[i] = comps[i].gameObject;
+                    __state = new DrawerState { Renderers = comps, Objects = objects };
                     Drawers[key] = __state;
                 }
                 long hash;
                 // 프리팹 렌더러가 파괴됐는데 ClearLayers를 거치지 않은 경우: 상태를 버리고 원래대로 그림
-                try { hash = LayerHash(__state.Renderers, pixelsPerUnit); }
+                try { hash = LayerHash(__state, pixelsPerUnit); }
                 catch (Exception e)
                 {
                     Plugin.L.LogWarning("layer hash 실패, 원래 경로로 그림: " + e.Message);
@@ -132,12 +146,14 @@ namespace LXIUM_mahosaba
         {
             static bool Prefix(TransitionalRenderer __instance, RenderTexture texture)
             {
+                long t = Stopwatch.GetTimestamp();
                 try { return Decide(__instance, texture); }
                 catch (Exception e)
                 {
                     Plugin.L.LogWarning("copy hash 실패, 원래 경로로 그림: " + e.Message);
                     return true;
                 }
+                finally { RenderLab.ModTicks += Stopwatch.GetTimestamp() - t; }
             }
 
             static bool Decide(TransitionalRenderer renderer, RenderTexture texture)
