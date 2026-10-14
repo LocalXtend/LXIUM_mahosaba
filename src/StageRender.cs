@@ -35,6 +35,7 @@ namespace LXIUM_mahosaba
         static Vector3[] _lastPos;
         static Quaternion[] _lastRot;
         static float[] _lastFov;
+        static UniversalAdditionalCameraData _main;
 
         [HarmonyPatch(typeof(StageCameraController), "SetCameraEnabled")]
         static class SetCameraEnabledPatch
@@ -115,17 +116,23 @@ namespace LXIUM_mahosaba
             return moved;
         }
 
+        // 실험실이 UI를 숨길 때 남겨 둘 캔버스 (무대 화면 RawImage가 있는 곳)
+        internal static Canvas ScreenCanvas => _images?.Length > 0 ? _images[0]?.canvas?.rootCanvas : null;
+
         // 후처리: 볼륨 효과가 모두 0이라 무대 카메라의 후처리는 LUT 만들기 + FXAA뿐이고, 메인 카메라가 화면 전체에
-        // FXAA를 한 번 더 함. 깊이: SSAO를 끄면 깊이 텍스처가 안 생기는데 원본 불 셰이더는 깊이를 읽으므로 따로 요청
-        // (FireLite는 깊이를 읽지 않음)
+        // FXAA를 한 번 더 함. 그래서 메인 카메라 후처리가 켜져 있을 때만 무대 쪽을 끔. 게임 옵션에서 후처리를 끄면
+        // 무대 FXAA를 살려 법정 가장자리가 그대로 다듬어지게 함.
+        // 깊이: SSAO를 끄면 깊이 텍스처가 안 생기는데 원본 불 셰이더는 깊이를 읽으므로 따로 요청 (FireLite는 깊이를 읽지 않음)
         static void ApplyCameraData()
         {
             bool needDepth = UrpTuning.Ssao == SsaoMode.Off && !FireRender.UsingLite;
+            if (_main == null) _main = Camera.main?.GetComponent<UniversalAdditionalCameraData>();
+            bool mainPost = _main == null || _main.renderPostProcessing;
             for (int i = 0; i < _data.Length; i++)
             {
                 var d = _data[i];
                 if (d == null) continue;
-                bool post = _origPost[i] && !PostOff;
+                bool post = _origPost[i] && !(PostOff && mainPost);
                 if (d.renderPostProcessing != post) d.renderPostProcessing = post;
                 var depth = needDepth ? CameraOverrideOption.On : _origDepth[i];
                 if (d.requiresDepthOption != depth) d.requiresDepthOption = depth;

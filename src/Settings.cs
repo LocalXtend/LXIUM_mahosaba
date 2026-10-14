@@ -25,8 +25,8 @@ namespace LXIUM_mahosaba
                 "0 = 모니터 주사율에 맞춤(VSync 켬), -1 = 제한 없음(VSync 끔), 그 밖의 숫자 = 그 fps로 제한(VSync 끔). 게임의 60/30 설정보다 우선");
             MsaaOff = c.Bind("Urp", "MsaaOff", true,
                 "2D(직교) 카메라의 MSAA 4x를 끔. 스프라이트·UI는 가장자리가 투명이라 MSAA 효과가 없음. 3D 법정 카메라는 [Stage] MsaaOff가 정함");
-            Ssao = c.Bind("Urp", "Ssao", SsaoMode.StageLite,
-                "SSAO(화면 공간 앰비언트 오클루전) 적용 범위. StageLite = 3D 법정 카메라만 + 절반 해상도·낮은 품질, StageOnly = 법정만 원래 품질, Off = 모두 끔, Game = 원래대로 모든 카메라. 법정 조명이 스포트라이트뿐이라 측정 장면에서는 셋 다 화면이 같았음");
+            Ssao = c.Bind("Urp", "Ssao", SsaoMode.Off,
+                "SSAO(화면 공간 앰비언트 오클루전) 적용 범위. Off = 모두 끔, StageLite = 3D 법정 카메라만 + 절반 해상도·낮은 품질, StageOnly = 법정만 원래 품질, Game = 원래대로 모든 카메라. 법정 조명이 스포트라이트뿐이라 768p·1080p 측정 모두 넷의 법정 화면이 화소까지 같았음");
             IntermediateAuto = c.Bind("Urp", "IntermediateAuto", true,
                 "렌더러의 중간 텍스처를 Always에서 Auto로. 필요 없는 카메라(캐릭터 합성 등)의 복사 패스를 없앰");
             CharacterChangeOnly = c.Bind("Character", "ChangeOnly", true,

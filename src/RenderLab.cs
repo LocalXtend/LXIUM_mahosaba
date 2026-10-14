@@ -5,7 +5,7 @@ using System.IO;
 using System.Linq;
 using BepInEx;
 using BepInEx.Unity.IL2CPP.Utils.Collections;
-using Il2CppInterop.Runtime.InteropTypes.Arrays;
+using Il2CppInterop.Runtime;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering.Universal;
@@ -50,14 +50,16 @@ namespace LXIUM_mahosaba
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
             ("02_noStage", () => StageRender.Freeze = true),
-            ("03_ssaoOff", () => SetSsao(SsaoMode.Off)),
-            ("04_ssaoFull", () => SetSsao(SsaoMode.StageOnly)),
-            ("05_stageHalfRate", () => StageRender.HalfRate = true),
-            ("06_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
-            ("07_mainPostOff", () => MainPost(true)),
-            ("08_fireOn", () => Fire(Settings.FireLite.Value)),
-            ("09_fireOriginal", () => Fire(false)),
-            ("10_current", null),
+            // 진단: 무대 화면을 뺀 UI 캔버스를 숨김. 01과의 차이 = UI(대사창·메뉴·글자·그림자) 비용
+            ("03_noUI", () => HideUi(true)),
+            ("04_ssaoLite", () => SetSsao(SsaoMode.StageLite)),
+            ("05_ssaoFull", () => SetSsao(SsaoMode.StageOnly)),
+            ("06_stageHalfRate", () => StageRender.HalfRate = true),
+            ("07_stageRes75", () => StageRender.ResolutionOverride = Screen.height / 1080f * 0.75f),
+            ("08_mainPostOff", () => MainPost(true)),
+            ("09_fireOn", () => Fire(Settings.FireLite.Value)),
+            ("10_fireOriginal", () => Fire(false)),
+            ("11_current", null),
         };
 
         static void SetSsao(SsaoMode mode) => UrpTuning.Set(UrpTuning.MsaaOff, mode, UrpTuning.IntermediateAuto);
@@ -87,6 +89,27 @@ namespace LXIUM_mahosaba
             _main.renderPostProcessing = false;
         }
 
+        static readonly List<Canvas> Hidden = new();
+
+        static void HideUi(bool hide)
+        {
+            if (!hide)
+            {
+                foreach (var c in Hidden)
+                    if (c != null) c.enabled = true;
+                Hidden.Clear();
+                return;
+            }
+            var keep = StageRender.ScreenCanvas;
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Canvas>()))
+            {
+                var c = o.Cast<Canvas>();
+                if (!c.isRootCanvas || !c.isActiveAndEnabled || (keep != null && c.Pointer == keep.Pointer)) continue;
+                c.enabled = false;
+                Hidden.Add(c);
+            }
+        }
+
         public static void ApplySettings()
         {
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
@@ -100,6 +123,7 @@ namespace LXIUM_mahosaba
             FireRender.Lite = Settings.FireLite.Value;
             FireRender.ForceFire(false);
             MainPost(false);
+            HideUi(false);
         }
 
         static IEnumerator Run()
@@ -109,11 +133,10 @@ namespace LXIUM_mahosaba
             var log = new List<string>
             {
                 $"screen={Screen.width}x{Screen.height} {Screen.fullScreenMode} gfx={SystemInfo.graphicsDeviceType} ({SystemInfo.graphicsDeviceName}) quality={QualitySettings.GetQualityLevel()}",
-                $"characterResolution={Settings.CharacterResolution.Value} (실험 중 고정), frameTiming={FrameTimingManager.IsFeatureEnabled()}",
+                $"characterResolution={Settings.CharacterResolution.Value} (실험 중 고정)",
             };
             FrameRate.Override = -1;
             var times = new List<float>(4096);
-            var timing = new Il2CppStructArray<FrameTiming>(1);
 
             for (int i = 0; i < Presets.Length; i++)
             {
@@ -125,27 +148,15 @@ namespace LXIUM_mahosaba
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
 
                 times.Clear();
-                double cpu = 0, wait = 0, gpu = 0;
-                int timed = 0;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
                 for (float t = 0; t < Sample; t += Time.unscaledDeltaTime)
                 {
                     times.Add(Time.unscaledDeltaTime);
-                    FrameTimingManager.CaptureFrameTimings();
-                    if (FrameTimingManager.GetLatestTimings(1, timing) > 0 && timing[0].cpuMainThreadFrameTime > 0)
-                    {
-                        cpu += timing[0].cpuMainThreadFrameTime;
-                        wait += timing[0].cpuMainThreadPresentWaitTime;
-                        gpu += timing[0].gpuFrameTime;
-                        timed++;
-                    }
                     yield return null;
                 }
                 int frames = times.Count;
-                // cpuMain에는 GPU를 기다리는 시간(presentWait)이 들어 있음. D3D11에서는 gpu가 0으로 올 수 있음
-                string extra = timed > 0 ? $" cpuMain={cpu / timed:F2}ms presentWait={wait / timed:F2}ms gpu={gpu / timed:F2}ms" : "";
-                if (_fireCount > 0) extra += $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}";
+                string extra = _fireCount > 0 ? $" fire={_fireCount} fireVisible={FireRender.VisibleFire()}" : "";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +
