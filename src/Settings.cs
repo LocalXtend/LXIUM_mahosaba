@@ -46,8 +46,8 @@ namespace LXIUM_mahosaba
                 "법정 카메라가 멈춰 있으면 두 프레임에 한 번만 그림. 움직일 때는 매 프레임. 불·캐릭터 변화가 반 박자 늦을 수 있음");
             FireLite = c.Bind("Stage", "FireLite", true,
                 "법정 불을 LXIUM FireLite 셰이더로 그림 (텍스처 읽기 8 → 4회, 불 비용 약 1/4. 벽·바닥과 닿는 곳의 흐림 없음). Direct3D 11 전용, 다른 API에서는 원본");
-            CourtLite = c.Bind("Stage", "CourtLite", false,
-                "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회). Direct3D 11 전용");
+            CourtLite = c.Bind("Stage", "CourtLite", true,
+                "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본");
             Lab = c.Bind("Debug", "RenderLab", false,
                 "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
         }
