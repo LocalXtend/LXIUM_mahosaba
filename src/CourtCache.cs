@@ -38,7 +38,7 @@ namespace LXIUM_mahosaba
         static bool _usingCached;
         static Vector3 _pos;
         static Quaternion _rot;
-        static float _fov, _lastRefresh;
+        static float _fov, _lastRefresh, _nextFind;
         static long _lightKey;
 
         // 무대 카메라 렌더 직전(LateUpdate)에 부름. rendering[i] = 이번 프레임에 그 카메라를 그리는지
@@ -101,8 +101,11 @@ namespace LXIUM_mahosaba
             Refreshes++;
         }
 
+        // 법정 찾기는 전체 객체 검색이라 비쌈(10차: 매 프레임 하면 모드 CPU +2.6 ms) → 1초에 한 번만
         static bool Setup(Camera[] cams, Shader cached)
         {
+            if (Time.unscaledTime < _nextFind) return _court != null;
+            _nextFind = Time.unscaledTime + 1f;
             var court = CourtShaders.ActiveCourt();
             if (court == null) { Teardown(); return false; }
             if (_court != null && court.Pointer == _court.Pointer) return true;

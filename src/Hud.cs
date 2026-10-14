@@ -191,7 +191,7 @@ namespace LXIUM_mahosaba
             float slow = Frames[Math.Min(n - 1, (int)(n * 0.99f))];
             float fast = Frames[(int)(n * 0.01f)];
             double mod = (RenderLab.ModTicks - _modStart) * 1000.0 / Stopwatch.Frequency / n;
-            string delta = _refAvg > 0 ? $"{avg - _refAvg:+0.00;-0.00} ms (플래그 바뀌기 전 {_refAvg:F2})" : "— (플래그가 바뀌면 표시)";
+            string delta = _refAvg > 0 ? $"{avg - _refAvg:+0.00;-0.00} ms (전 {_refAvg:F2})" : "— (플래그가 바뀌면)";
             _fpsLines = new[]
             {
                 $"FPS  {n * 1000f / sum:F1}",
@@ -215,17 +215,34 @@ namespace LXIUM_mahosaba
 
         static readonly Color OnColor = new(0.4f, 1f, 0.5f), OffColor = new(1f, 0.42f, 0.42f);
 
+        // 한 줄 글자용 스타일: 줄바꿈 없음, 줄 높이는 실제 글꼴로 잼. 글자 크기의 고정 배수로 잡으면
+        // 화면 크기·비율에 따라 글자 아래가 잘림
+        static GUIStyle _line;
+        static int _lineSize = -1;
+        static float _lineHeight;
+
+        static void EnsureStyle(int fs)
+        {
+            if (_line == null)
+            {
+                _line = new GUIStyle();
+                _line.normal.textColor = Color.white;
+            }
+            if (_lineSize == fs) return;
+            _line.fontSize = fs;
+            _lineSize = fs;
+            _lineHeight = Mathf.Ceil(_line.CalcHeight(new GUIContent("가Ag|"), 10000f)) + 2;
+        }
+
         public static void Draw()
         {
             if (RenderLab.Capturing || (!_showFps && !_showFlags)) return;
             // 글자·상자만 그리고 입력을 받지 않으므로 그리기 이벤트에서만 (레이아웃·마우스 이벤트 때의 중복 비용을 뺌)
             if (Event.current.type != EventType.Repaint) return;
-            var label = GUI.skin.label;
-            int oldSize = label.fontSize;
             var oldColor = GUI.contentColor;
             int fs = Math.Max(12, Screen.height / 60);
-            label.fontSize = fs;
-            float line = fs * 1.45f, pad = fs * 0.6f, w = fs * 19f;
+            EnsureStyle(fs);
+            float line = _lineHeight, pad = fs * 0.6f, w = fs * 24f;
             float x = Screen.width - w - pad, y = pad;
 
             if (_showFps)
@@ -233,7 +250,7 @@ namespace LXIUM_mahosaba
                 float h = line * _fpsLines.Length + pad * 2;
                 Panel(new Rect(x, y, w, h));
                 for (int i = 0; i < _fpsLines.Length; i++)
-                    GUI.Label(new Rect(x + pad, y + pad + i * line, w - pad * 2, line), _fpsLines[i]);
+                    GUI.Label(new Rect(x + pad, y + pad + i * line, w - pad * 2, line), _fpsLines[i], _line);
                 y += h + pad;
             }
 
@@ -244,7 +261,7 @@ namespace LXIUM_mahosaba
                     if (!f.LabOnly || RenderLab.Running) shown.Add(f);
                 float h = line * (shown.Count + 1) + pad * 2;
                 Panel(new Rect(x, y, w, h));
-                GUI.Label(new Rect(x + pad, y + pad, w - pad * 2, line), "LXIUM 플래그 (마우스를 올리면 설명)");
+                GUI.Label(new Rect(x + pad, y + pad, w - pad * 2, line), "LXIUM 플래그 (마우스를 올리면 설명)", _line);
                 var mouse = MousePosition();
                 Flag hovered = null;
                 float hoverY = 0;
@@ -253,7 +270,7 @@ namespace LXIUM_mahosaba
                     var r = new Rect(x + pad, y + pad + (i + 1) * line, w - pad * 2, line);
                     bool on = shown[i].On();
                     GUI.contentColor = on ? OnColor : OffColor;
-                    GUI.Label(r, (on ? "● " : "○ ") + shown[i].Text());
+                    GUI.Label(r, (on ? "● " : "○ ") + shown[i].Text(), _line);
                     if (r.Contains(mouse))
                     {
                         hovered = shown[i];
@@ -263,18 +280,22 @@ namespace LXIUM_mahosaba
                 GUI.contentColor = oldColor;
                 if (hovered != null)
                 {
-                    // 패널 왼쪽에 설명 상자
-                    float tw = w * 1.5f;
+                    // 패널 왼쪽에 설명 상자. 여러 줄이라 줄바꿈되는 기본 label 스타일로 높이를 잼
+                    var label = GUI.skin.label;
+                    int oldSize = label.fontSize;
+                    label.fontSize = fs;
+                    float tw = w * 1.4f;
                     var content = new GUIContent(hovered.Help);
-                    float th = label.CalcHeight(content, tw - pad * 2) + pad * 2;
+                    float textH = Mathf.Ceil(label.CalcHeight(content, tw - pad * 2)) + line * 0.5f;
+                    float th = textH + pad * 2;
                     float ty = Mathf.Clamp(hoverY, pad, Screen.height - th - pad);
                     var tr = new Rect(x - tw - pad, ty, tw, th);
                     Panel(tr);
-                    GUI.Label(new Rect(tr.x + pad, tr.y + pad, tw - pad * 2, th - pad * 2), content);
+                    GUI.Label(new Rect(tr.x + pad, tr.y + pad, tw - pad * 2, textH), content);
+                    label.fontSize = oldSize;
                 }
             }
 
-            label.fontSize = oldSize;
             GUI.contentColor = oldColor;
         }
 
