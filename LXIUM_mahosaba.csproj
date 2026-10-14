@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>LXIUM_mahosaba</AssemblyName>
+    <RootNamespace>LXIUM_mahosaba</RootNamespace>
+    <Product>LXIUM mahosaba</Product>
+    <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)ver.txt').Trim())</Version>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <RestoreAdditionalProjectSources>https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
+    <!-- 게임 루트. 다른 위치면 빌드 때 -p:GameDir=... 로 지정 -->
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\manosaba_game</GameDir>
+    <!-- BepInEx가 첫 실행 때 만드는 interop 어셈블리. 설치 전이면 -p:InteropDir=... 로 지정 -->
+    <InteropDir Condition="'$(InteropDir)' == ''">$(GameDir)\BepInEx\interop</InteropDir>
+  </PropertyGroup>
+
+  <!-- 로더는 런처가 설치하므로 컴파일에만 씀 (docs/ai/addon.md 5장) -->
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.785" IncludeAssets="compile" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="$(InteropDir)\Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Il2CppSystem.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.ImageConversionModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.UIModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(InteropDir)\UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Unity.InputSystem.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Unity.RenderPipelines.Universal.Runtime.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Elringus.Naninovel.Runtime.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Assembly-CSharp.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- docs/ai/addon.md 7장: lxium.json의 version은 ver.txt와 같아야 함 -->
+  <Target Name="CheckManifestVersion" BeforeTargets="Build">
+    <PropertyGroup>
+      <ManifestVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)lxium.json')), '"version"\s*:\s*"([^"]+)"').Groups[1].Value)</ManifestVersion>
+    </PropertyGroup>
+    <Error Condition="'$(ManifestVersion)' != '$(Version)'" Text="lxium.json version '$(ManifestVersion)' != ver.txt '$(Version)'" />
+  </Target>
+
+  <!-- Release 빌드: dist/<id>-<version>.zip (docs/ai/addon.md 2장 구조) -->
+  <Target Name="PackageAddon" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <PkgDir>$(BaseIntermediateOutputPath)pkg\</PkgDir>
+      <DistDir>$(MSBuildThisFileDirectory)dist\</DistDir>
+    </PropertyGroup>
+    <RemoveDir Directories="$(PkgDir)" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)lxium.json" DestinationFolder="$(PkgDir)" />
+    <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(PkgDir)bepinex6\BepInEx\plugins\$(AssemblyName)" />
+    <MakeDir Directories="$(DistDir)" />
+    <ZipDirectory SourceDirectory="$(PkgDir)" DestinationFile="$(DistDir)$(AssemblyName)-$(Version).zip" Overwrite="true" />
+  </Target>
+
+  <!-- 개발용: -p:Deploy=true 이면 게임의 BepInEx/plugins/LXIUM_mahosaba/ 에 바로 복사 -->
+  <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' == 'true'">
+    <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\$(AssemblyName)" />
+  </Target>
+
+</Project>
