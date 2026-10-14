@@ -165,7 +165,11 @@ namespace LXIUM_mahosaba
             static bool Prefix(TransitionalRenderer __instance, RenderTexture texture)
             {
                 long t = Stopwatch.GetTimestamp();
-                try { return Decide(__instance, texture); }
+                try
+                {
+                    if (StageRender.ChangeOnly) StageRender.NoteActor(__instance);
+                    return Decide(__instance, texture);
+                }
                 catch (Exception e)
                 {
                     Plugin.L.LogWarning("copy hash 실패, 원래 경로로 그림: " + e.Message);
@@ -176,14 +180,15 @@ namespace LXIUM_mahosaba
 
             static bool Decide(TransitionalRenderer renderer, RenderTexture texture)
             {
-                if (!ChangeOnly || texture == null) { CopyDraws++; return true; }
+                // 복사가 새 그림을 만들면 법정 카메라(바뀔 때만 그리기)에도 알림
+                if (!ChangeOnly || texture == null) { CopyDraws++; StageRender.Dirty = true; return true; }
                 var main = renderer.MainTexture;
-                if (main == null) return true;
+                if (main == null) { StageRender.Dirty = true; return true; }
 
                 int version = 0;
                 var mainRt = main.TryCast<RenderTexture>();
                 // 출처를 모르는 RT(DicedSprite·영상 등)는 내용 변화를 알 수 없으므로 항상 그림
-                if (mainRt != null && !TextureVersions.TryGetValue(mainRt.Pointer, out version)) { CopyDraws++; return true; }
+                if (mainRt != null && !TextureVersions.TryGetValue(mainRt.Pointer, out version)) { CopyDraws++; StageRender.Dirty = true; return true; }
 
                 // 내용 버전을 뺀 입력 (전환·색·대상). 이것이 바뀌면 연출이 시작된 것
                 var tint = renderer.TintColor;
@@ -209,6 +214,8 @@ namespace LXIUM_mahosaba
                 // 전환·색 변화가 시작됨 → 레이어 캐릭터를 잠시 모두 매 프레임 검사.
                 // 내용 버전만 바뀐 경우(1초 안전 갱신 포함)는 해당 없음
                 if (s.Inputs != inputs) _allHotUntil = now + HotTime;
+                // 안전 갱신(입력이 같음)은 알리지 않음. 법정 카메라는 자기 안전 갱신으로 따라감
+                if (s.Hash != h) StageRender.Dirty = true;
                 s.Inputs = inputs;
                 s.Hash = h;
                 s.LastDraw = now;

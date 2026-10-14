@@ -5,7 +5,6 @@
 //   CL_PS + CL_MAPS      바닥·계단: 노멀·메탈릭·오클루전 맵 (원본 _NORMALMAP _METALLICSPECGLOSSMAP _OCCLUSIONMAP 변형)
 //   CL_PS + CL_CUTOUT    벽: 알파 테스트 (원본 _ALPHATEST_ON 변형)
 //   CL_PS + CL_PREMUL    단상: 투명 premultiply (원본 _SURFACE_TYPE_TRANSPARENT _ALPHAPREMULTIPLY_ON 변형)
-//   CL_CACHED (+ CL_CUTOUT)  LXIUM/CourtCached: 법정 건물 캐시를 읽기만 함 (파일 끝 참고)
 // 원본에서 뺀 것: 메인 라이트·추가 라이트 그림자, SSAO, 반사 프로브 블렌딩·박스 투영, 라이트 쿠키·레이어, 메인 라이트.
 // 법정에는 방향광·그림자·쿠키·반사 프로브가 없어(mahosaba.md 6.2) 빠진 항은 원본에서도 0이거나 1이다.
 // 이 게임은 감마 색공간이라 URP처럼 SH만 sRGB로 바꾼다.
@@ -236,37 +235,6 @@ float4 frag(V2F i) : SV_Target
     }
 
     return float4(color, _Surface == 1 ? albedo.a : 1);
-}
-
-#elif defined(CL_CACHED)
-
-// LXIUM/CourtCached: 법정 건물 캐시. 같은 시점에서 CourtLite로 그려 둔 색을 픽셀 그대로 읽어 조명 계산을 건너뜀.
-// 원본 _NORMALMAP _METALLICSPECGLOSSMAP _OCCLUSIONMAP 변형의 바인딩을 쓰고, 캐시 텍스처는 _OcclusionMap 자리(t5)에
-// C#이 넣는다. 깊이는 그대로 써서 캐릭터·단상·불과의 앞뒤 관계는 원래와 같다.
-//   CL_CUTOUT: 벽의 알파 테스트 구멍(난간). 이 변형 바인딩에는 _Cutoff가 없어 0.5로 고정 (C#이 0.5인 재질만 씀)
-
-cbuffer Globals : register(b0)
-{
-    float4 _cg0[4];
-    float4 _GlobalMipBias;              // 64 (.x)
-};
-
-cbuffer UnityPerMaterial : register(b3)
-{
-    float4 _cm0[3];
-    float4 _BaseColor;                  // 48
-};
-
-Texture2D _BaseMap : register(t3);
-SamplerState sampler_BaseMap : register(s4);
-Texture2D _OcclusionMap : register(t5);
-
-float4 frag(V2F i) : SV_Target
-{
-#if defined(CL_CUTOUT)
-    clip(_BaseMap.SampleBias(sampler_BaseMap, i.uv, _GlobalMipBias.x).a * _BaseColor.a - 0.5);
-#endif
-    return float4(_OcclusionMap.Load(int3(i.pos.xy, 0)).rgb, 1);
 }
 
 #endif

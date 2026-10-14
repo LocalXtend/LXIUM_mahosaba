@@ -51,7 +51,8 @@ namespace LXIUM_mahosaba
                 changed |= s.On != s.Applied;
                 any |= s.On || s.Applied;
             }
-            if (!any) return;
+            // 법정 바뀔 때만 그리기도 이 수집으로 법정 렌더러 목록을 받음
+            if (!any && !StageRender.ChangeOnly) return;
             // 법정 프리팹은 재판마다 다시 로드될 수 있어 1초마다 재질을 다시 모음
             if (!changed && Time.unscaledTime < _nextFind) return;
             _nextFind = Time.unscaledTime + 1f;
@@ -66,6 +67,7 @@ namespace LXIUM_mahosaba
                     if (m == null || m.shader == want) continue;
                     m.shader = want;
                     if (s.Queues.TryGetValue(m.Pointer, out int queue)) m.renderQueue = queue;
+                    StageRender.Dirty = true;
                 }
             }
         }
@@ -103,19 +105,22 @@ namespace LXIUM_mahosaba
         static void Collect()
         {
             foreach (var s in All) s.Materials.Clear();
+            Court active = null;
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Court>()))
             {
                 var court = o.Cast<Court>();
                 Add(court.GetComponentsInChildren<Renderer>(true));
                 if (court._fireVfx != null) Add(court._fireVfx.GetComponentsInChildren<Renderer>(true));
+                if (active == null && court.gameObject.activeInHierarchy) active = court;
             }
+            StageRender.SetCourt(active);
         }
 
         static void Add(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<Renderer> renderers)
         {
             foreach (var r in renderers)
             {
-                var m = CourtCache.LiveOf(r.sharedMaterial);
+                var m = r.sharedMaterial;
                 var shader = m?.shader;
                 if (shader == null) continue;
                 string name = shader.name;
@@ -131,16 +136,6 @@ namespace LXIUM_mahosaba
                     break;
                 }
             }
-        }
-
-        internal static Court ActiveCourt()
-        {
-            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Court>()))
-            {
-                var court = o.Cast<Court>();
-                if (court.gameObject.activeInHierarchy) return court;
-            }
-            return null;
         }
     }
 }

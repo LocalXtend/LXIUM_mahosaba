@@ -46,19 +46,18 @@ namespace LXIUM_mahosaba
             {
                 UrpTuning.Set(false, SsaoMode.Game, false);
                 ActorRender.ChangeOnly = false;
-                StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = false;
+                StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = StageRender.ChangeOnly = false;
                 StageRender.ResolutionOverride = 1f;
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
-                CourtCache.On = ActorRender.FastDetect = false;
+                ActorRender.FastDetect = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
             ("02_noStage", () => StageRender.Freeze = true),
-            ("03_courtCache", () => CourtCache.On = true),
-            ("04_courtCacheOff", () => CourtCache.On = false),
-            // 예전 변화 감지 (모든 캐릭터를 매 프레임 확인). 01과의 modCpu 차이 = 빠른 감지 효과
-            ("05_fastDetectOff", () => ActorRender.FastDetect = false),
-            ("06_current", null),
+            // 법정 카메라를 장면이 바뀐 프레임에만 그림. 03과 04의 차이 = 효과, 02가 상한
+            ("03_stageChangeOnly", () => StageRender.ChangeOnly = true),
+            ("04_stageChangeOnlyOff", () => StageRender.ChangeOnly = false),
+            ("05_current", null),
         };
 
         public static void ApplySettings()
@@ -66,11 +65,13 @@ namespace LXIUM_mahosaba
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
             ActorRender.FastDetect = Settings.FastDetect.Value;
-            CourtCache.On = Settings.CourtCache.Value;
             StageRender.HiddenSkip = Settings.StageHiddenSkip.Value;
             StageRender.MsaaOff = Settings.StageMsaaOff.Value;
             StageRender.PostOff = Settings.StagePostOff.Value;
             StageRender.HalfRate = Settings.StageHalfRate.Value;
+            StageRender.ChangeOnly = Settings.StageChangeOnly.Value;
+            // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
+            StageRender.Dirty = true;
             StageRender.ResolutionOverride = null;
             StageRender.Freeze = false;
             StageRender.CullHidden = true;
@@ -100,7 +101,6 @@ namespace LXIUM_mahosaba
 
                 times.Clear();
                 long mod = ModTicks;
-                int refreshes = CourtCache.Refreshes;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
                 for (float t = 0; t < Sample; t += Time.unscaledDeltaTime)
@@ -109,7 +109,7 @@ namespace LXIUM_mahosaba
                     yield return null;
                 }
                 int frames = times.Count;
-                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms cacheRefresh={(float)(CourtCache.Refreshes - refreshes) / frames:F2}";
+                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +

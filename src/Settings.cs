@@ -19,7 +19,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> StageHalfRate;
         public static ConfigEntry<bool> FireLite;
         public static ConfigEntry<bool> CourtLite;
-        public static ConfigEntry<bool> CourtCache;
+        public static ConfigEntry<bool> StageChangeOnly;
         public static ConfigEntry<bool> Lab;
 
         public static void Bind(ConfigFile c)
@@ -52,8 +52,8 @@ namespace LXIUM_mahosaba
                 "법정 불을 LXIUM FireLite 셰이더로 그림 (텍스처 읽기 8 → 4회, 불 비용 약 1/4. 벽·바닥과 닿는 곳의 흐림 없음). Direct3D 11 전용, 다른 API에서는 원본");
             CourtLite = c.Bind("Stage", "CourtLite", true,
                 "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본");
-            CourtCache = c.Bind("Stage", "CourtCache", false,
-                "법정 카메라가 멈춰 있는 동안 바닥·벽·계단의 조명 결과를 한 번만 그려 두고 다시 씀 (CourtLite 필요, D3D11 전용, 분할 화면에서는 꺼짐)");
+            StageChangeOnly = c.Bind("Stage", "ChangeOnly", false,
+                "법정 카메라가 보는 것(카메라 위치, 캐릭터 그림·위치·불투명도, 법정 렌더러·조명)이 그대로인 프레임은 다시 그리지 않고 지난 그림을 씀. 불이 켜져 있으면 매 프레임 그림. 놓친 변화는 최대 1초 늦음 (실험 중)");
             Lab = c.Bind("Debug", "RenderLab", false,
                 "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
         }
