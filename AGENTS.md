@@ -9,9 +9,13 @@ ver.txt에 버전을 작성합니다.
 
 ## 애드온 구조 (필수)
 이 프로젝트의 결과물은 LXIUM 런처가 설치·제거하는 애드온 패키지입니다.
-- 규격: LXIUM 저장소의 `docs/ai/addon.md` (이 폴더 기준 `../../docs/ai/addon.md`). 빌드·패키징 작업 전에 반드시 읽고 따릅니다.
+- 규격: LXIUM 저장소의 `docs/ai/addon.md` (https://github.com/LocalXtend/LXIUM/blob/dev/docs/ai/addon.md. LXIUM 저장소의 `optimizeMods/` 안에 clone했으면 `../../docs/ai/addon.md`). 빌드·패키징 작업 전에 반드시 읽고 따릅니다.
 - 이 프로젝트의 값: `id` = `LXIUM_mahosaba`, `game.id` = `mahosaba`.
 - 규격으로 해결되지 않는 것이 있으면 임의로 확장하지 말고 규격 수정을 먼저 제안합니다.
+
+## 문서
+- `docs/human/`은 사람용, `docs/ai/`는 AI용 문서입니다. 같은 주제는 같은 파일 이름으로 양쪽에 두고, 한쪽을 고치면 다른 쪽도 같은 커밋에서 고칩니다.
+- `mahosaba.md`: 게임 분석 (구조·근거), `mahosaba-render.md`: LXIUM 렌더링 설계·측정 기록
 
 ## 코드 작성법
 - 생각을 위한 주석이 아닌 코드를 설명하는 주석을 작성하세요.
@@ -30,13 +34,16 @@ git은 dev 브렌치를 사용합니다.
 기본적으로 git 행위를 지속적으로 업데이트합니다.
 항상 코드 수정을 할 때마다 git을 합니다.
 
-git 저장소는 LXIUM 저장소 하나입니다 (https://github.com/LocalXtend/LXIUM). 이 폴더에서 `git init`을 하지 않고, 커밋은 LXIUM 저장소에 합니다.
-릴리즈 태그는 `<id>-v<버전>` 형식입니다 (예: `LXIUM_sephiria-v1.0.0`). `id`는 애드온 구조 절의 값입니다.
+git 저장소는 이 프로젝트 전용입니다 (https://github.com/LocalXtend/LXIUM_mahosaba). 런처·규격 문서가 있는 LXIUM 저장소와 따로 커밋합니다.
+로컬에서는 LXIUM 저장소의 `optimizeMods/LXIUM_mahosaba/`에 clone해 둡니다. LXIUM 저장소는 `optimizeMods/`를 git에서 제외합니다.
+릴리즈 태그·제목은 `<id>-v<버전>` 형식입니다 (예: `LXIUM_sephiria-v1.0.0`). `id`는 애드온 구조 절의 값입니다.
+릴리즈에는 `dist/<id>-<버전>.zip`을 올리고, 본문은 LXIUM 저장소 AGENTS.md의 "git 릴리즈에 관해서" 형식을 따릅니다.
+릴리즈한 뒤 LXIUM 저장소에서 `build.ps1`로 공식 애드온 모음(catalog.json)을 갱신해 커밋합니다 (LXIUM `docs/ai/catalog.md` 4장). 모음의 sha256과 같아야 하므로 릴리즈에는 `build.ps1`이 모은 zip을 그대로 올립니다.
 
 커밋은 GitHub 계정 LocalXtend로 합니다 (`user.name=LocalXtend`, `user.email=285211027+LocalXtend@users.noreply.github.com`).
 
 ## Readme 작성법
-이 폴더의 README.md는 아래 내용을 그대로 씁니다. 버전 줄만 바꿉니다.
+이 저장소의 README.md는 아래 내용을 그대로 씁니다. 버전 줄만 바꿉니다.
 (현재 = 방금 릴리즈한 버전)
 ```
 # LXIUM_mahosaba
