@@ -37,7 +37,7 @@
 | B3 | 액터 원래 해상도 | 레이어 캐릭터 메타데이터 PPU를 `화면 높이 / 1440`배로(1080p: 0.75 → 1125x2250, 픽셀 56%). 합성 RT와 화면 쿼드가 같이 줄어 화면상 크기 그대로 | Spatial Resolution을 "월드 = 화면 밖 액터 합성"에만 적용. UI·대사는 메인 카메라라 영향 없음 | 구현 `Character.Resolution` |
 | B4 | 무대 가시성 컬링 | 게임이 무대를 띄운 동안에도, RawImage의 상속 알파가 0인 화면의 카메라는 끔. 0.2.3부터 그 RawImage도 `CanvasRenderer.cull = true`로 그리기 목록에서 뺌 (UGUI는 알파 0이어도 화면 크기 투명 사각형을 그림) | — | 구현 `Stage.HiddenSkip` (2차: -10.2 ms. RawImage 컬링 7차 1080p: -0.14 ms, 화면 차이 0) |
 | B5 | 무대 해상도 | `RenderTexture_1/2`를 화면 높이에 맞춰 줄임(원래 화면과 무관하게 1920x1080). RawImage가 화면 크기로 보여 주므로 화면보다 큰 RT는 낭비. 해상도를 바꾸면 따라감 | Spatial Resolution | 구현 `Stage.Resolution` (기본 0 = 화면 맞춤, 0.1.1. 3차: 768p에서 -5.1 ms, 세밀한 무늬에서 화소 차이 2.6%) |
-| B6 | 무대 반 프레임 | 무대 카메라의 위치·회전·FOV가 지난 프레임과 같으면 두 프레임에 한 번만 그림(두 카메라는 번갈아). 그 사이에는 RT의 지난 그림을 RawImage가 그대로 보여 줌. 카메라가 움직이는 프레임은 항상 그려서 팬·줌이 끊기지 않음. 불·캐릭터 변화는 최대 1프레임 늦음 | Temporal Frame Reprojection | 선택 `Stage.HalfRate` (4차: -2.0 ms, 정지 장면 화면 같음. 프레임 시간이 번갈아 짧고 길어 기본은 끔) |
+| B6 | 무대 반 프레임 | 무대 카메라의 위치·회전·FOV가 지난 프레임과 같으면 두 프레임에 한 번만 그림(두 카메라는 번갈아). 그 사이에는 RT의 지난 그림을 RawImage가 그대로 보여 줌. 카메라가 움직이는 프레임은 항상 그려서 팬·줌이 끊기지 않음. 불·캐릭터 변화는 최대 1프레임 늦음 | Temporal Frame Reprojection | 선택 `Stage.HalfRate` (4차: -2.0 ms, 정지 장면 화면 같음. 프레임 시간이 번갈아 짧고 길어 기본은 끔. 0.5.2: 바로 앞 프레임에 그린 카메라만 건너뜀 — 그 전에는 숨어 있다 나타난 카메라도 첫 프레임을 건너뛰어 RT에 남은 오래된 장면이 한 프레임 보일 수 있었음 [추론: 코드]. B16이 켜져 있으면 멈춘 장면은 B16이 이미 건너뛰므로, 반 프레임은 불처럼 매 프레임 바뀌는 장면에서만 차이를 냄) |
 | B10 | 무대 MSAA 끄기 | `RenderTexture_1/2.antiAliasing` 2 → 1 (`Release` 후 변경). 가장자리는 무대 카메라의 FXAA가 다듬음 | — | 기본 켬 `Stage.MsaaOff` (0.2.1. 4차: -1.13 ms, 화면 차이 0) |
 | B11 | 무대 후처리 끄기 | 무대 카메라 `UniversalAdditionalCameraData.renderPostProcessing = false`. 볼륨 효과가 모두 0이라 후처리는 색 보정 LUT 만들기 + 우버 패스 + FXAA뿐이고, 메인 카메라가 화면 전체에 FXAA를 한 번 더 함. 0.2.2부터 메인 카메라 후처리가 꺼져 있으면(게임 옵션) 무대 후처리를 살려 법정이 무보정으로 남지 않게 함 | — | 기본 켬 `Stage.PostOff` (0.2.1. 4차: -0.66 ms, 평균 1.7/255) |
 | B12 | 깊이 프라이밍 | SSAO 프리패스 깊이로 불투명 패스를 `ZTest Equal`. 실제 렌더러(`asset.scriptableRenderer`)의 `depthPrimingMode`를 무대 카메라만 `Forced`로 바꿔 실험 | Render Fast | **제거** (0.2.1. 4차: MSAA 끔 위에서 추가 이득 0) |
@@ -142,9 +142,9 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Stage.HiddenSkip` | true | 없음 |
 | `Stage.MsaaOff` | true (0.2.1) | 측정 장면에서 없음 (FXAA가 다듬음) |
 | `Stage.PostOff` | true (0.2.1) | 거의 없음 (법정에 FXAA가 두 번 → 한 번, 평균 1.7/255). 게임 옵션에서 후처리를 끄면 무대 후처리는 켜진 채로 둠 |
-| `Stage.HalfRate` | false | 카메라가 멈춰 있을 때 불·캐릭터 변화가 반 박자 늦음 |
+| `Stage.HalfRate` | false | 카메라가 멈춰 있을 때 불·캐릭터 변화가 반 박자 늦음. `CourtChangeOnly`와 함께면 불처럼 매 프레임 바뀌는 장면에서만 차이 |
 | `Stage.CourtLite` | true (0.3.2) | 원본과 같아야 함 (그림자·SSAO·반사 프로브가 원래 없는 법정). D3D11 전용 |
-| `Stage.FireLite` | true (0.2.1) | 불 쿼드가 벽·바닥과 닿는 경계가 또렷해질 수 있음. D3D11 전용 |
+| `Stage.FireLite` | true (0.2.1) | 불 쿼드가 벽·바닥과 닿는 경계가 또렷해질 수 있음. 실제 불 연출에서 자세히 보면 원본과 조금 다름 (사용자 확인). D3D11 전용 |
 | `Character.FastDetect` | true (0.4.0) | 놓친 변화는 최대 3프레임 늦음 |
 | `Stage.CourtChangeOnly` | true (0.5.1) | 감지한 변화는 같은 프레임에 반영. 감지하지 못한 변화(법정 밖 연출 등)는 최대 1초 늦음. 불이 켜져 있으면 매 프레임 그림 |
 | `Debug.RenderLab` | false | — |
@@ -165,5 +165,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 ## 6. 미확인
 
 - B2의 해시가 놓치는 입력이 있는지 (전환 중 시간 기반 효과 등). 놓쳐도 1초 안에 다시 그림
+  - 확인한 것 [관찰: ISIL]: `TransitionalRenderer`의 `MainTexture`·`TransitionTexture`·`TransitionProgress`·`TintColor` 등은 필드가 아니라 `TextureMaterial`(`TransitionalMaterial`) 값을 읽고 씀. `TransitionTo`는 시작 때 `TransitionalMaterial.UpdateRandomSeed`를 부름 → 해시에 없는 입력은 전환 종류(`Transition`)·난수 씨앗·디졸브 텍스처. 셋 다 전환 시작 때만 바뀌고 그때 `TransitionTexture`·진행도도 함께 바뀌므로 놓칠 가능성은 낮음 [추론]
+  - 사용자 보고 (0.5.1): 일반 대화에서 배경이 바뀔 때 조금 느리고 이전 장면이 잠깐 비치는 느낌. 일반 대화(2D)에서는 무대 카메라가 꺼져 있어 B16·B6과 무관 [추론: `Present`/`Dismiss`]. B2(`Character.ChangeOnly`)를 끄고 같은 장면을 비교해 달라고 요청함
 - B3 적용 시 확대 연출의 화질
-- C3을 실제 불 연출 장면에서 본 화질 (실험실은 지금 장면의 불을 강제로 켜서 봄)
+- C3을 실제 불 연출 장면에서 본 화질: 사용자 확인 — 자세히 보면 원본과 차이가 있으나 설정(`Stage.FireLite`)으로 끌 수 있어 기본 켬 유지

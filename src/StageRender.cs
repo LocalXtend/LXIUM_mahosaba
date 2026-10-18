@@ -47,7 +47,7 @@ namespace LXIUM_mahosaba
         static UniversalAdditionalCameraData _main;
         // 장면 버전: 바뀐 프레임마다 1 증가. 카메라마다 마지막으로 그린 버전(-1 = 지난 그림이 맞지 않음)과 시각
         static int _version;
-        static int[] _drawnVersion;
+        static int[] _drawnVersion, _drawnFrame;
         static float[] _lastDraw;
         static long _actorSum, _actorKey, _courtKey;
 
@@ -81,6 +81,7 @@ namespace LXIUM_mahosaba
             _lastFov = new float[n];
             _drawnVersion = new int[n];
             Array.Fill(_drawnVersion, -1);
+            _drawnFrame = new int[n];
             _lastDraw = new float[n];
             for (int i = 0; i < n; i++)
             {
@@ -120,14 +121,16 @@ namespace LXIUM_mahosaba
                 bool moved = Moved(i, cam);
                 if (moved) _drawnVersion[i] = -1;
                 // 반 프레임: 카메라가 멈춰 있으면 두 프레임에 한 번만 그리고 그 사이에는 RT의 지난 그림을 그대로 보여 줌.
-                // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림
-                if (want && HalfRate && !moved && ((Time.frameCount + i) & 1) == 1) want = false;
+                // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림.
+                // 바로 앞 프레임에 그린 카메라만 건너뜀: 숨어 있다 나타난 카메라의 RT는 오래된 장면이라 바로 그림
+                if (want && HalfRate && !moved && _drawnFrame[i] == Time.frameCount - 1 && ((Time.frameCount + i) & 1) == 1) want = false;
                 // 바뀔 때만 그리기: 마지막으로 그린 뒤 장면이 그대로면 RT의 지난 그림을 그대로 보여 줌. 1초마다 한 번은 그림
                 if (want && ChangeOnly && _drawnVersion[i] == _version && now - _lastDraw[i] < RefreshInterval) want = false;
                 if (cam.enabled != want) cam.enabled = want;
                 if (presented && !want) Skipped++;
                 if (!want) continue;
                 _drawnVersion[i] = _version;
+                _drawnFrame[i] = Time.frameCount;
                 _lastDraw[i] = now;
             }
         }
