@@ -99,6 +99,22 @@ B1·B2가 켜지면 대사만 넘기는 장면에서 화면 밖 렌더는 거의
 
 UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p 화면에 쿼드 몇 장 + UI라서 가능성이 높다 [추론]. 재판 장면은 Iris Xe 768p 창 모드에서 A+B1+B2+B4+B5로 115fps (mahosaba.md 10장 3차), 4차에서 B10·B11·B13·C3 조합으로 768p 154 fps. 0.3.2(C4 추가) 1080p 약 185 fps. **1080p 전체 화면**(5차): 0.2.1 기본 124 fps, SSAO 끔(0.2.2 기본) 160 fps. 남은 6.2 ms ≈ 무대 카메라 2.4 + 메인 카메라·UI·CPU 3.8 [관찰·추론: 10장 5차].
 
+### D. 멈춤(로딩 랙) 줄이기 (0.6.0)
+
+13차 ETW 추적(10장 13차)으로 찾은 긴 프레임의 원인별 대응. 모두 결과는 원래와 같고 순서·방법만 바꿈.
+
+| # | 원인 [관찰: 추적 호출 트리] | 대응 | 상태 |
+|---|---|---|---|
+| D1 | TMP 동적 폰트에 새 글자를 더할 때마다 `TMP_FontAsset.UpdateGSUB/GPOSFontFeaturesForNewGlyphIndex` → `FontEngine.GetLigatureSubstitutionRecords`가 폰트의 OpenType 표 전체를 다시 읽고 버림(`OTL_Table::Clear_Deallocate`가 66%). 불러오기 화면 한 프레임 430 ms 중 79%, 재판 시작 레이아웃 재구성 한 프레임의 38% | `TMP_Settings.m_GetFontFeaturesAtRuntime = false`. `TryAddCharacterInternal`이 이 값을 보고 두 단계를 건너뜀 [관찰: ISIL `get_getFontFeaturesAtRuntime` 비교 후 분기]. 이미 굽혀 있던 글자의 합자·커닝은 그대로. 한글 음절은 합자가 없음 | 기본 `Text.FastGlyphs` |
+| D2 | Naninovel `ResourceProvider.IsLocationCached<T>(path)` = `LocationsCache.Any(r => r.Path == path && AreTypesCompatible(r.Type, typeof(T)))`. 위치 목록이 2.8만~5.5만 개라 한 번에 약 1 ms. 대본을 불러올 때 명령마다 불려 재판 시작에 300·500 ms 프레임 | 제네릭 공유 구현(GameAssembly+0x754AF0, 앞 24바이트 확인)을 `INativeDetour`로 가로채 경로 → 형식 목록 색인으로 찾음. 형식 판정은 원래와 같은 `AreTypesCompatible`(쌍마다 캐시). 목록은 뒤에 더해지기만 해서 늘어난 만큼만 이어서 색인, 줄면 다시 만듦. 색인은 IL2CPP 메모리 직접 읽기(List `_items` +0x10, 배열 +0x20, 항목 16바이트, 문자열 +0x10 길이·+0x14 글자) — 처음 항목을 interop 값과 비교해 맞을 때만 | 기본 (설정 없음). 검증: 진단 모드에서 처음 200번은 원래 함수와 결과 비교, 690번 중 다른 것 0. 351번 조회 2.0 ms (전 250~470 ms). 색인을 늘리는 첫 조회는 2.7만 개에 약 50 ms |
+| D3 | 모드 코드가 처음 불릴 때 CoreCLR가 메인 스레드에서 JIT (`clrjit!CILJit::compileMethod`, 프레임 73·50 ms) | `Plugin.Load`에서 모드 어셈블리의 모든 메서드를 `RuntimeHelpers.PrepareMethod` (113개) | 기본 |
+| D4 | 화면 패널(IMGUI) 첫 표시: IMGUI 글꼴의 커닝 표 읽기(`FontEngine.GetPairAdjustmentRecords`) 350·170 ms. 또 `OnGUI`가 있는 컴포넌트는 그리지 않아도 매 프레임 IMGUI가 돎 | `OnGUI`를 별도 컴포넌트(`GuiHost`)로 옮겨 패널·실험실 안내가 있을 때만 켬. 첫 표시 멈춤은 남음 (TMP로 바꾸면 D1 효과를 받음) | 일부 |
+| D5 | 새 글자 SDF 그리기(`TryAddGlyphToTexture` → `Calculate3x3AAEDT`) 글자당 수 ms. 대사 한 줄에 새 글자가 많으면 100~180 ms | 남는 프레임에 앞으로 나올 글자를 미리 더하기 (대본의 문장 또는 자주 쓰는 한글 2,350자) | 후보 |
+| D6 | 상태 저장(`CharacterManagerExtended.SaveServiceState` → `ActorState.OverwriteFromActor` → `String.Join` + LINQ) — Gosub 때 121 ms | 외형이 그대로면 지난 문자열 재사용 | 후보 |
+| D7 | 모드의 관리 힙 GC(`coreclr!gc_heap::garbage_collect`, 167 ms 프레임의 13%) | 매 프레임 할당 줄이기, `GCSettings.LatencyMode` | 후보 |
+| D8 | 캐릭터 첫 합성: 8K 아틀라스 업로드·RT 만들기(`CreateTexture2D` 0.8 s/로딩), 번들 LZ4·crunch 풀기 | 비동기 업로드 버퍼(16 MB → 아틀라스 크기)·시간 조각 조정 실험 | 후보 (로그: `priority=BelowNormal uploadSlice=2ms uploadBuffer=16MB`) |
+| D9 | `SaveLoadUi.OnShow` 페이지 칸 `Instantiate` | — | 게임 UI 구조 |
+
 ### 채택하지 않는 것
 
 | 힌트 | 이유 |
@@ -147,6 +163,8 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Stage.FireLite` | true (0.2.1) | 불 쿼드가 벽·바닥과 닿는 경계가 또렷해질 수 있음. 실제 불 연출에서 자세히 보면 원본과 조금 다름 (사용자 확인). D3D11 전용 |
 | `Character.FastDetect` | true (0.4.0) | 놓친 변화는 최대 3프레임 늦음 |
 | `Stage.CourtChangeOnly` | true (0.5.1) | 감지한 변화는 같은 프레임에 반영. 감지하지 못한 변화(법정 밖 연출 등)는 최대 1초 늦음. 불이 켜져 있으면 매 프레임 그림 |
+| `Text.FastGlyphs` | true (0.6.0) | 동적으로 더해지는 글자에 합자·커닝이 적용되지 않음. 한글 음절은 합자가 없음 |
+| `Debug.LayerDiag` | false (0.6.0) | — (분석용 로그) |
 | `Debug.RenderLab` | false | — |
 
 0.2.1 기본값은 4차 측정으로 정함. 이전 버전의 설정 파일에는 옛 기본값(false/StageOnly)이 적혀 있어 그대로 남으므로, 업데이트한 사용자는 직접 바꿔야 함 (BepInEx는 파일에 있는 값을 우선)
@@ -155,17 +173,26 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 
 ## 5. 화면 패널 (0.4.0, `Hud`)
 
-- 화면 오른쪽 위. IMGUI. 실험실 스크린샷 프레임에는 숨김. 그리기 이벤트(Repaint)에서만 그림
+- 화면 오른쪽 위. IMGUI. 실험실 스크린샷 프레임에는 숨김. 그리기 이벤트(Repaint)에서만 그림. 0.6.0부터 패널·실험실 안내가 있을 때만 `OnGUI` 컴포넌트를 켬 (D4)
 - 글자: 줄바꿈 없는 전용 `GUIStyle`(흰 글자), 줄 높이는 `CalcHeight("가Ag|")`로 실제 글꼴에서 잼 (0.4.1. 0.4.0은 글자 크기×1.45로 잡아 화면 비율에 따라 아래가 잘렸음). 설명 상자만 줄바꿈되는 기본 label 스타일
 - **PgUp: 프레임 통계** — 최근 1초 창. FPS, 하위 1%(가장 느린 1% 프레임 시간의 fps), 상위 1%(가장 빠른 1%), 프레임 시간 평균, **바뀐 시간**(플래그가 바뀌면 그 직전 창의 평균을 기준으로 지금 평균의 차이), 모드 CPU(프레임당, 패널 비용 포함)
 - **PgDn: 플래그 목록** — 지금 실제로 적용된 값(실험실이 바꾸는 값 포함)을 초록(켜짐)·빨강(꺼짐)으로. 마우스를 올리면 패널 왼쪽에 설명(기능·측정값·개선 가능성). 진단 플래그는 실험실이 도는 동안만 보임
 - 이 게임은 새 Input System만 써서 IMGUI `Event.mousePosition`이 갱신되지 않음 → `Mouse.current.position`을 IMGUI 좌표로 바꿔 씀 [관찰: 0.4.0 실행 확인]
 - PgUp·PgDn은 게임 입력 설정(Input System 바인딩)에 없음 [관찰: 번들 문자열]
 
-## 6. 미확인
+## 7. 프로파일링 (ETW, 0.6.0)
+
+개발 빌드가 아닌 게임이라 Unity 프로파일러를 쓸 수 없어서 Windows 이벤트 추적(ETW)으로 잰다.
+
+1. 추적: `wpr -start tools\Prof\lite.wprp!Lite -filemode` → 게임 조작 → `wpr -stop out.etl` (관리자). `lite.wprp` = CPU 샘플(스택) + DXGI Present 이벤트만. 기본 `CPU` 프로필은 문맥 전환 스택 때문에 Unity 잡 스레드가 많으면 추적 자체가 게임을 크게 느리게 함(7.7 GB, 스택 걷기 19%)
+2. 기호: UnityPlayer.dll은 Unity 심볼 서버(`https://symbolserver.unity3d.com`)에 릴리스 플레이어 PDB가 있음 (`UnityPlayer_Win64_player_il2cpp_x64.pdb`, 22.8 MB). GameAssembly.dll은 PDB가 없어 Cpp2IL로 메서드 주소표(9.5만 개)를 만듦 (`Prof map`)
+3. 분석 (`tools/Prof`, TraceProcessor): `frames` = Present 간격으로 프레임 시간 통계·긴 프레임 목록, `tree` = 구간의 메인 스레드 호출 트리, `cpu` = 구간의 함수별 합계, `timeline` = 스레드별 CPU 사용
+4. 진단 설정 `Debug.LayerDiag`: 5초마다 캐릭터 합성 횟수·원인(바뀐 레이어·항목)·원래 합성 시간, D2 색인 조회 수·시간을 로그에 남김
+
+## 8. 미확인
 
 - B2의 해시가 놓치는 입력이 있는지 (전환 중 시간 기반 효과 등). 놓쳐도 1초 안에 다시 그림
   - 확인한 것 [관찰: ISIL]: `TransitionalRenderer`의 `MainTexture`·`TransitionTexture`·`TransitionProgress`·`TintColor` 등은 필드가 아니라 `TextureMaterial`(`TransitionalMaterial`) 값을 읽고 씀. `TransitionTo`는 시작 때 `TransitionalMaterial.UpdateRandomSeed`를 부름 → 해시에 없는 입력은 전환 종류(`Transition`)·난수 씨앗·디졸브 텍스처. 셋 다 전환 시작 때만 바뀌고 그때 `TransitionTexture`·진행도도 함께 바뀌므로 놓칠 가능성은 낮음 [추론]
-  - 사용자 보고 (0.5.1): 일반 대화에서 배경이 바뀔 때 조금 느리고 이전 장면이 잠깐 비치는 느낌. 일반 대화(2D)에서는 무대 카메라가 꺼져 있어 B16·B6과 무관 [추론: `Present`/`Dismiss`]. B2(`Character.ChangeOnly`)를 끄고 같은 장면을 비교해 달라고 요청함
+  - 사용자 보고 (0.5.1): 일반 대화에서 배경이 바뀔 때 조금 느리고 이전 장면이 잠깐 비치는 느낌 → 디스코드 화면 공유 때문이었음 (사용자 확인). 모드와 무관
 - B3 적용 시 확대 연출의 화질
 - C3을 실제 불 연출 장면에서 본 화질: 사용자 확인 — 자세히 보면 원본과 차이가 있으나 설정(`Stage.FireLite`)으로 끌 수 있어 기본 켬 유지

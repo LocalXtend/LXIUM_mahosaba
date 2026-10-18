@@ -20,7 +20,9 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> FireLite;
         public static ConfigEntry<bool> CourtLite;
         public static ConfigEntry<bool> StageChangeOnly;
+        public static ConfigEntry<bool> FastGlyphs;
         public static ConfigEntry<bool> Lab;
+        public static ConfigEntry<bool> LayerDiag;
 
         public static void Bind(ConfigFile c)
         {
@@ -54,6 +56,10 @@ namespace LXIUM_mahosaba
                 "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본");
             StageChangeOnly = c.Bind("Stage", "CourtChangeOnly", true,
                 "법정 카메라가 보는 것(카메라 위치, 캐릭터 그림·위치·불투명도, 법정 렌더러·조명)이 그대로인 프레임은 다시 그리지 않고 지난 그림을 씀. 불이 켜져 있으면 매 프레임 그림. 놓친 변화는 최대 1초 늦음. 캐릭터 쪽 바뀔 때만 그리기는 [Character] ChangeOnly");
+            FastGlyphs = c.Bind("Text", "FastGlyphs", true,
+                "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 이 표 읽기가 글자마다 수십 ms라 처음 보는 한글이 많은 화면(불러오기 목록 등)에서 0.4초 멈춤이 생김. 한글 음절에는 합자가 없어 모양은 같음");
+            LayerDiag = c.Bind("Debug", "LayerDiag", false,
+                "캐릭터 다시 합성 원인 기록: 5초마다 어떤 캐릭터의 어떤 레이어가 왜 바뀌었는지 로그에 남김 (분석용)");
             Lab = c.Bind("Debug", "RenderLab", false,
                 "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
         }

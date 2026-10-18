@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using HarmonyLib;
 using Naninovel;
 using UnityEngine;
@@ -39,6 +40,9 @@ namespace LXIUM_mahosaba
 
         sealed class DrawerState
         {
+            public string Name;
+            // 진단용: 렌더러별 마지막 상태 (켜짐, 스프라이트, 재질, 레이어, 색)
+            public (bool On, IntPtr Sprite, IntPtr Material, int Layer, Color Color)[] Parts;
             public SpriteRenderer[] Renderers;
             // 렌더러마다 gameObject를 매 프레임 꺼내면 interop 래퍼가 새로 만들어지므로 한 번만 꺼내 둠
             public GameObject[] Objects;
@@ -81,6 +85,58 @@ namespace LXIUM_mahosaba
             return h;
         }
 
+        // 진단 (설정 Debug.LayerDiag): 해시가 바뀔 때 렌더러별 상태를 지난번과 비교해 "캐릭터 / 레이어 / 바뀐 항목"별
+        // 횟수를 모으고 5초마다 로그에 남김
+        static readonly Dictionary<string, int> DiagCounts = new();
+        static float _diagDump;
+
+        static void DiagNote(DrawerState s, RenderTexture rt)
+        {
+            var parts = new (bool On, IntPtr Sprite, IntPtr Material, int Layer, Color Color)[s.Renderers.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                var r = s.Renderers[i];
+                bool on = s.Objects[i].activeInHierarchy && r.enabled;
+                parts[i] = (on, r.sprite?.Pointer ?? IntPtr.Zero, r.sharedMaterial?.Pointer ?? IntPtr.Zero, s.Objects[i].layer, r.color);
+            }
+            void Count(string what) => DiagCounts[$"{s.Name} / {what}"] = DiagCounts.GetValueOrDefault($"{s.Name} / {what}") + 1;
+            if (rt == null || rt.Pointer != s.Texture) Count("RT 바뀜");
+            if (s.Parts != null)
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    var (a, b) = (s.Parts[i], parts[i]);
+                    if (a == b) continue;
+                    string n = s.Objects[i].name;
+                    if (a.On != b.On) Count(n + " 켜짐");
+                    else if (!b.On) continue;
+                    else if (a.Sprite != b.Sprite) Count(n + " 스프라이트");
+                    else if (a.Material != b.Material) Count(n + " 재질");
+                    else if (a.Layer != b.Layer) Count(n + $" 레이어 {a.Layer}->{b.Layer}");
+                    else Count(n + $" 색 {a.Color}->{b.Color}");
+                }
+            s.Parts = parts;
+        }
+
+        static long _diagStart, _diagTicks, _diagMaxTicks;
+        static int _diagFrame;
+        static int _diagDraws, _diagRefreshes;
+        static readonly HashSet<IntPtr> DiagRefreshed = new();
+
+        // Host.Update에서 부름: 5초마다 합성 횟수·원인·원래 합성에 든 시간을 로그에 남김
+        internal static void DiagTick()
+        {
+            if (!Settings.LayerDiag.Value || Time.unscaledTime < _diagDump) return;
+            _diagDump = Time.unscaledTime + 5f;
+            double ms = _diagTicks * 1000.0 / Stopwatch.Frequency, max = _diagMaxTicks * 1000.0 / Stopwatch.Frequency;
+            Plugin.L.LogInfo($"layer diag 5s: draws={_diagDraws} (safety={_diagRefreshes} from {DiagRefreshed.Count} of {Drawers.Count} drawers, frames={Time.frameCount - _diagFrame}) total={ms:F1}ms avg={(_diagDraws > 0 ? ms / _diagDraws : 0):F2}ms max={max:F2}ms");
+            foreach (var (k, v) in DiagCounts.OrderByDescending(x => x.Value).Take(12)) Plugin.L.LogInfo("layer diag " + v.ToString().PadLeft(5) + " " + k);
+            DiagCounts.Clear();
+            DiagRefreshed.Clear();
+            _diagFrame = Time.frameCount;
+            _diagDraws = _diagRefreshes = 0;
+            _diagTicks = _diagMaxTicks = 0;
+        }
+
         [HarmonyPatch(typeof(LayeredDrawer), nameof(LayeredDrawer.DrawLayers))]
         static class DrawLayersPatch
         {
@@ -99,7 +155,7 @@ namespace LXIUM_mahosaba
                     var comps = drawer.transform.GetComponentsInChildren<SpriteRenderer>(true);
                     var objects = new GameObject[comps.Length];
                     for (int i = 0; i < comps.Length; i++) objects[i] = comps[i].gameObject;
-                    __state = new DrawerState { Renderers = comps, Objects = objects, Slot = _nextSlot++ & 3 };
+                    __state = new DrawerState { Renderers = comps, Objects = objects, Slot = _nextSlot++ & 3, Name = drawer.transform.root.name };
                     Drawers[key] = __state;
                 }
                 float now = Time.unscaledTime;
@@ -125,6 +181,7 @@ namespace LXIUM_mahosaba
                 }
                 bool same = hash == __state.Hash && renderTexture != null && renderTexture.Pointer == __state.Texture;
                 if (!same) __state.HotUntil = now + HotTime;
+                if (!same && Settings.LayerDiag.Value) DiagNote(__state, renderTexture);
                 if (ChangeOnly && same && (!due || !TakeRefreshSlot(ref _layerRefreshFrame)))
                 {
                     LayerSkips++;
@@ -132,6 +189,8 @@ namespace LXIUM_mahosaba
                     return false;
                 }
                 __state.Hash = hash;
+                if (same) { _diagRefreshes++; DiagRefreshed.Add(key); }
+                _diagStart = Stopwatch.GetTimestamp();
                 return true;
             }
 
@@ -139,6 +198,10 @@ namespace LXIUM_mahosaba
             {
                 if (!__runOriginal || __result == null) return;
                 LayerDraws++;
+                long dt = Stopwatch.GetTimestamp() - _diagStart;
+                _diagDraws++;
+                _diagTicks += dt;
+                if (dt > _diagMaxTicks) _diagMaxTicks = dt;
                 // RT가 바뀌면 이전 RT는 RenderAppearance가 임시 풀에 돌려주므로 버전 기록도 지움
                 if (__state.Texture != __result.Pointer) TextureVersions.Remove(__state.Texture);
                 __state.Texture = __result.Pointer;

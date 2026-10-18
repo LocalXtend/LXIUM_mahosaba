@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 가벼운 WPR 프로필: CPU 샘플(스택) + DXGI Present 이벤트만. 문맥 전환 스택을 빼서 Unity 잡 스레드가 많아도 부담이 작음
+     사용: wpr -start tools\Prof\lite.wprp!Lite -filemode  ...  wpr -stop out.etl -->
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <SystemCollector Id="SC" Name="NT Kernel Logger">
+      <BufferSize Value="1024"/>
+      <Buffers Value="256"/>
+    </SystemCollector>
+    <EventCollector Id="EC" Name="LXIUM User">
+      <BufferSize Value="1024"/>
+      <Buffers Value="64"/>
+    </EventCollector>
+    <SystemProvider Id="SP">
+      <Keywords>
+        <Keyword Value="ProcessThread"/>
+        <Keyword Value="Loader"/>
+        <Keyword Value="SampledProfile"/>
+      </Keywords>
+      <Stacks>
+        <Stack Value="SampledProfile"/>
+      </Stacks>
+    </SystemProvider>
+    <!-- Microsoft-Windows-DXGI: Present 시작·끝 -->
+    <EventProvider Id="DXGI" Name="CA11C036-0102-4A2D-A6AD-F03CFED5D3C9" Level="4"/>
+    <Profile Id="Lite.Verbose.File" Name="Lite" Description="LXIUM lite CPU + present" LoggingMode="File" DetailLevel="Verbose">
+      <Collectors>
+        <SystemCollectorId Value="SC">
+          <SystemProviderId Value="SP"/>
+        </SystemCollectorId>
+        <EventCollectorId Value="EC">
+          <EventProviders>
+            <EventProviderId Value="DXGI"/>
+          </EventProviders>
+        </EventCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

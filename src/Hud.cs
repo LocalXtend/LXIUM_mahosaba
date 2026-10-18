@@ -152,6 +152,8 @@ namespace LXIUM_mahosaba
         static ulong _signature = ulong.MaxValue;
         static string[] _fpsLines = { "측정 중…" };
 
+        internal static bool Visible => _showFps || _showFlags;
+
         public static void Tick()
         {
             var kb = Keyboard.current;

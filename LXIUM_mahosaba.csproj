@@ -10,6 +10,8 @@
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)ver.txt').Trim())</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- tools/는 따로 빌드하는 개발 도구 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tools/**</DefaultItemExcludes>
     <RestoreAdditionalProjectSources>https://nuget.bepinex.dev/v3/index.json</RestoreAdditionalProjectSources>
     <!-- 게임 루트. 다른 위치면 빌드 때 -p:GameDir=... 로 지정 -->
     <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\manosaba_game</GameDir>
@@ -32,6 +34,7 @@
     <Reference Include="$(InteropDir)\UnityEngine.ScreenCaptureModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.UIModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.UI.dll" Private="false" />
+    <Reference Include="$(InteropDir)\Unity.TextMeshPro.dll" Private="false" />
     <Reference Include="$(InteropDir)\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="$(InteropDir)\Unity.InputSystem.dll" Private="false" />
     <Reference Include="$(InteropDir)\Unity.RenderPipelines.Core.Runtime.dll" Private="false" />
