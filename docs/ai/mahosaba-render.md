@@ -166,6 +166,16 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 - Naninovel `TransitionalSpriteRenderer.Update`(5F7970): 액터마다 매 프레임 머티리얼 값 쓰기 + `PrepareRenderTexture` + `Graphics.DrawMesh` 1~2번 (액터 12명에 0.09 ms)
 - 모드 부분별 시간에 `Court`(법정 변화 검사, LateTick 안)·`Masks`(F2 판단) 칸을 더함. 재판 대화 프레임당: 전환 복사 확인 0.13~0.15 ms(12번), LateTick 0.13~0.15 ms(그중 Court 0.07), Update 0.06, DrawLayers 0.05(11번), Masks 0.02 [관찰: Claude 앱 GPU 사용 중이라 실제보다 큼]
 
+### H. 별도 CPU 연구 인계 (2026-10-19, 19차)
+
+**런타임 기능 추가 없음, 개발 버전 0.8.0 유지.** `b6b4768` 기준의 Canvas 탐색·클리핑·렌더 제출 연구는 [mahosaba-ui.md 6장](mahosaba-ui.md#6-2026-10-19-별도-cpu-연구-19차-미채택)에 전체 결과를 남겼다.
+
+- Canvas null 결과 캐시는 프레임당 약 70번의 탐색을 제거했지만, 새 패치 없는 기준과 전체 성능이 겹쳐 실험 코드·설정을 제거했다. `CanvasLookupReuse`는 현 기능이 아니다.
+- 활성 RectMask2D 16개 중 빈 대상은 1개. 정지 마스크·TMP·렌더 그래프는 엔진에 기존 변화 검사/캐시가 있어 일반적인 중복 캐시는 구현하지 않았다.
+- 후속 후보: 그림자 없는 카메라의 ShadowCasters 컬링 준비, TSR의 일회성 DrawMesh 제출을 상주 렌더러로 대체. **둘 다 미구현·미측정**, 일반 게임 화면까지 그림자/정렬/전환 보존 조건부터 확인해야 한다.
+- 19차는 수동 저장 11번의 두 캐릭터 대화라 18차의 372 fps와 직접 비교하지 않는다. 다른 작업의 모드 자체 이벤트 전환이나 TrueShadow 반속도는 건드리지 않았다.
+- 실험용 DLL을 원래 0.8.0으로 복원, 사용자 값 보존 후 `GpuTimer/LayerDiag/RenderLab=false`, 게임 종료. 원본 GameAssembly·metadata 해시 유지. 릴리스·catalog 변경 없음.
+
 ### 채택하지 않는 것
 
 | 힌트 | 이유 |
@@ -210,6 +220,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 11. `Debug.LayerDiag`가 켜져 있으면 시작할 때 켜진 루트 캔버스와 화면의 4분의 1보다 큰 그래픽(화면 안 넓이, 상속 알파, 색 알파, `cullTransparentMesh`, 클릭 판정 여부, 마스크), 법정 화면 캔버스 상세(셰이더·마스크·RT 형식), 메인 카메라 HDR·MSAA를 로그에 남김
 12. **측정 환경**: 다른 프로그램이 GPU를 쓰면 결과가 크게 흔들림. 16차에 이 PC의 Claude 앱이 도구 실행 중 GPU 3D 엔진의 약 50%를 써서, 마스크 생략이 GPU를 1 ms 줄이고도 fps가 떨어지는 결과가 나왔음. 앱이 쉬는 동안 실험실을 돌리자 반대로 +10~20%. `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage"`로 프로세스별 사용률을 함께 기록할 것. 또 이 노트북(i5-1235U, 15 W급)은 CPU·GPU가 전력 한도를 나눠 써서 GPU 일을 줄이면 CPU 클럭이 오름 (UI를 뺀 진단에서 P 코어 2.1 → 2.56 GHz) → 어느 쪽을 줄여도 프레임이 빨라질 수 있음
 13. **자동 시작** (0.8.0): `BepInEx/LXIUM_mahosaba/lab.start` 파일이 생기면 F10 없이 시작 (1초마다 확인, 게임을 켜기 전에 만든 파일은 지우기만 함). 자동 입력 도구의 F10은 창 포커스·Windows 입력 도우미 창(TextInputHost)에 막혀 자주 실패했음. 세이브 불러오기는 Win32 `SetCursorPos`+`mouse_event`(DPI 인식)로 클릭. 타이틀은 BepInEx 로그에 `stage cameras=`가 찍힌 뒤에도 약 15초 지나야 입력을 받음. 불러오기 완료는 로그의 `stage court:`로 판단
+14. **자동화 범위**: 13번의 Win32 입력은 이전 회차의 외부 작업 기록이며 모드에 세이브 로더/회귀 테스트가 들어 있다는 뜻이 아니다. 19차는 창 화면을 확인하며 외부 클릭으로 수동 저장 11번을 골랐다. `lab.start`는 측정 시작만 담당한다. 대사·장면 고정과 새 패치가 아예 없는 기준을 확인하고, 예외 시 설정 복원까지 보장된 것으로 취급하지 않는다. [19차 검사·제외 기록](mahosaba-ui.md#6-2026-10-19-별도-cpu-연구-19차-미채택) 참조.
 
 ## 4. 설정 (`BepInEx/config/LXIUM_mahosaba.cfg`)
 
