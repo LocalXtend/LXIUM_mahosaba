@@ -64,24 +64,25 @@ namespace LXIUM_mahosaba
         {
             long t = Stopwatch.GetTimestamp();
             FrameRate.Enforce();
-            if (!_urpApplied) _urpApplied = UrpTuning.Apply();
+            if (!_urpApplied && (_urpApplied = UrpTuning.Apply())) GpuTimer.Install();
             CourtShaders.Tick();
             RenderLab.Tick(this);
             Hud.Tick();
             ActorRender.DiagTick();
             ResourceIndex.DiagTick();
+            ModProf.Tick();
             if (!_textApplied) _textApplied = TextTuning.Apply();
             // IMGUI(OnGUI)는 켜 두기만 해도 매 프레임 비용이 있어 화면 패널·실험실 안내가 있을 때만 켬
             bool gui = Hud.Visible || RenderLab.Status != null;
             if (Plugin.Gui.enabled != gui) Plugin.Gui.enabled = gui;
-            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
+            ModProf.Add(ModProf.Slot.Update, t);
         }
 
         void LateUpdate()
         {
             long t = Stopwatch.GetTimestamp();
             StageRender.LateTick();
-            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
+            ModProf.Add(ModProf.Slot.Late, t);
         }
 
     }
@@ -96,7 +97,7 @@ namespace LXIUM_mahosaba
             long t = Stopwatch.GetTimestamp();
             if (RenderLab.Status != null && !RenderLab.Capturing) GUI.Box(new Rect(10, 10, 760, 26), RenderLab.Status);
             Hud.Draw();
-            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
+            ModProf.Add(ModProf.Slot.Gui, t);
         }
     }
 }

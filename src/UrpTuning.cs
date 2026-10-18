@@ -82,7 +82,7 @@ namespace LXIUM_mahosaba
                 bool active = Ssao == SsaoMode.Game || (StageRender.IsStageCamera(cam) && Ssao is SsaoMode.StageOnly or SsaoMode.StageLite);
                 if (_ssao.isActive != active) _ssao.SetActive(active);
             }
-            RenderLab.ModTicks += Stopwatch.GetTimestamp() - t;
+            ModProf.Add(ModProf.Slot.Camera, t);
         }
     }
 }

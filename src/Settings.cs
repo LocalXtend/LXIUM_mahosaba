@@ -21,6 +21,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> CourtLite;
         public static ConfigEntry<bool> StageChangeOnly;
         public static ConfigEntry<bool> FastGlyphs;
+        public static ConfigEntry<bool> GpuTimer;
         public static ConfigEntry<bool> Lab;
         public static ConfigEntry<bool> LayerDiag;
 
@@ -37,7 +38,7 @@ namespace LXIUM_mahosaba
             CharacterChangeOnly = c.Bind("Character", "ChangeOnly", true,
                 "레이어 캐릭터를 바뀐 프레임에만 다시 합성. 게임은 표정이 그대로여도 매 프레임 카메라 렌더를 함");
             FastDetect = c.Bind("Character", "FastDetect", true,
-                "바뀔 때만 다시 그리기의 변화 확인을 가볍게: 최근에 바뀐 캐릭터만 매 프레임, 나머지는 4프레임에 한 번씩 돌아가며 확인 (놓친 변화는 최대 3프레임 늦음)");
+                "바뀔 때만 다시 그리기의 변화 확인을 가볍게: Naninovel이 표정·옷을 바꿀 때 보내는 신호를 받아 그때만 확인. 캐릭터마다 2초에 한 번은 직접 확인 (신호로 못 잡은 변화는 최대 2초 늦음)");
             CharacterResolution = c.Bind("Character", "Resolution", 0f,
                 "레이어 캐릭터 합성 해상도 배율. 0 = 화면 해상도에 맞춤(1080p에서 0.75), 1 = 원래(100 PPU)");
             StageResolution = c.Bind("Stage", "Resolution", 0f,
@@ -58,6 +59,8 @@ namespace LXIUM_mahosaba
                 "법정 카메라가 보는 것(카메라 위치, 캐릭터 그림·위치·불투명도, 법정 렌더러·조명)이 그대로인 프레임은 다시 그리지 않고 지난 그림을 씀. 불이 켜져 있으면 매 프레임 그림. 놓친 변화는 최대 1초 늦음. 캐릭터 쪽 바뀔 때만 그리기는 [Character] ChangeOnly");
             FastGlyphs = c.Bind("Text", "FastGlyphs", true,
                 "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 이 표 읽기가 글자마다 수십 ms라 처음 보는 한글이 많은 화면(불러오기 목록 등)에서 0.4초 멈춤이 생김. 한글 음절에는 합자가 없어 모양은 같음");
+            GpuTimer = c.Bind("Debug", "GpuTimer", false,
+                "카메라별 GPU 시간을 재서 5초마다 로그에 남기고 화면 패널(PgUp)에 보여 줌 (D3D11 타임스탬프 쿼리, 분석용)");
             LayerDiag = c.Bind("Debug", "LayerDiag", false,
                 "캐릭터 다시 합성 원인 기록: 5초마다 어떤 캐릭터의 어떤 레이어가 왜 바뀌었는지 로그에 남김 (분석용)");
             Lab = c.Bind("Debug", "RenderLab", false,

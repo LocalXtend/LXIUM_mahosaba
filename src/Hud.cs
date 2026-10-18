@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -204,6 +205,7 @@ namespace LXIUM_mahosaba
                 $"바뀐 시간  {delta}",
                 $"모드 CPU  {mod:F3} ms",
             };
+            if (GpuTimer.Summary.Length > 0) _fpsLines = _fpsLines.Append(GpuTimer.Summary).ToArray();
             _lastAvg = avg;
             StartWindow();
         }

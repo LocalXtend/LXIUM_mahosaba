@@ -14,20 +14,24 @@ namespace LXIUM_mahosaba
     //          → Graphics.DrawMesh(화면). 앞의 두 단계는 입력이 그대로면 결과도 그대로라 건너뛴다.
     static class ActorRender
     {
-        // 입력이 같아도 이 간격마다 한 번은 다시 그림 (놓친 변화가 화면에 남는 시간의 상한)
-        const float RefreshInterval = 1f;
+        // 입력이 같아도 이 간격마다 한 번은 다시 그림 (놓친 변화가 화면에 남는 시간의 상한).
+        // 이벤트 감지(FastDetect)가 켜져 있으면 2초마다 해시 검사가 따로 있어서 다시 그리기는 드물게
+        static float RefreshInterval => FastDetect ? 10f : 1f;
+        // 이벤트 감지 때 캐릭터마다 해시를 다시 검사하는 간격 (이벤트로 못 잡은 변화의 상한)
+        const float PollInterval = 2f;
         // CameraConfiguration.ReferenceResolution 2560x1440, ReferencePPU 100 → 1440p에서 1:1
         const float ReferenceHeight = 1440f;
 
         internal static bool ChangeOnly;
-        // 빠른 변화 감지: 최근에 바뀐(hot) 캐릭터만 매 프레임 검사하고, 나머지는 4프레임에 한 번씩 돌아가며 검사.
-        // 놓친 변화가 화면에 남는 시간은 최대 3프레임. 전환 효과가 도는 동안(복사 입력이 바뀐 직후)은 모두 매 프레임 검사
+        // 이벤트 감지: 레이어 해시를 매번 계산하지 않고, Naninovel이 외형을 바꿀 때(ApplyComposition, 레이어 Enabled,
+        // RebuildLayers) 올리는 번호(_epoch)가 그대로면 지난 그림을 씀. 2초마다 캐릭터 하나씩 해시로 다시 확인 (프레임당 최대 하나).
+        // 끄면 매번 해시 검사 (0.5.x 이전 방식)
         internal static bool FastDetect;
-        const float HotTime = 1f;
-        static float _allHotUntil;
-        static int _nextSlot;
-        // 안전 갱신은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 1초마다 끊김이 생김 (mahosaba.md 10장 2차)
-        static int _layerRefreshFrame = -1, _copyRefreshFrame = -1;
+        static long _epoch;
+        // 안전 갱신·확인은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 끊김이 생김 (mahosaba.md 10장 2차)
+        static int _layerRefreshFrame = -1, _copyRefreshFrame = -1, _pollFrame = -1;
+        // 진단: 이벤트 없이 확인 검사에서 발견된 변화 수 (0이어야 이벤트 감지가 빠짐없음)
+        static int _diagMissed;
 
         static bool TakeRefreshSlot(ref int lastFrame)
         {
@@ -46,10 +50,12 @@ namespace LXIUM_mahosaba
             public SpriteRenderer[] Renderers;
             // 렌더러마다 gameObject를 매 프레임 꺼내면 interop 래퍼가 새로 만들어지므로 한 번만 꺼내 둠
             public GameObject[] Objects;
-            public long Hash;
+            public long Hash, Epoch = -1;
             public IntPtr Texture;
-            public float LastDraw, HotUntil;
-            public int Slot;
+            public float LastDraw, LastCheck, Ppu;
+            // 캐릭터 루트. 루트가 켜지고 꺼지면 모든 레이어의 activeInHierarchy가 바뀌는데 외형 이벤트가 없음
+            public GameObject Root;
+            public bool RootActive;
         }
 
         sealed class CopyState
@@ -128,7 +134,7 @@ namespace LXIUM_mahosaba
             if (!Settings.LayerDiag.Value || Time.unscaledTime < _diagDump) return;
             _diagDump = Time.unscaledTime + 5f;
             double ms = _diagTicks * 1000.0 / Stopwatch.Frequency, max = _diagMaxTicks * 1000.0 / Stopwatch.Frequency;
-            Plugin.L.LogInfo($"layer diag 5s: draws={_diagDraws} (safety={_diagRefreshes} from {DiagRefreshed.Count} of {Drawers.Count} drawers, frames={Time.frameCount - _diagFrame}) total={ms:F1}ms avg={(_diagDraws > 0 ? ms / _diagDraws : 0):F2}ms max={max:F2}ms");
+            Plugin.L.LogInfo($"layer diag 5s: draws={_diagDraws} (safety={_diagRefreshes} from {DiagRefreshed.Count} of {Drawers.Count} drawers, missedByEvents={_diagMissed}, frames={Time.frameCount - _diagFrame}) total={ms:F1}ms avg={(_diagDraws > 0 ? ms / _diagDraws : 0):F2}ms max={max:F2}ms");
             foreach (var (k, v) in DiagCounts.OrderByDescending(x => x.Value).Take(12)) Plugin.L.LogInfo("layer diag " + v.ToString().PadLeft(5) + " " + k);
             DiagCounts.Clear();
             DiagRefreshed.Clear();
@@ -144,7 +150,7 @@ namespace LXIUM_mahosaba
             {
                 long t = Stopwatch.GetTimestamp();
                 try { return Run(__instance, pixelsPerUnit, renderTexture, ref __result, out __state); }
-                finally { RenderLab.ModTicks += Stopwatch.GetTimestamp() - t; }
+                finally { ModProf.Add(ModProf.Slot.Layers, t); }
             }
 
             static bool Run(LayeredDrawer drawer, float pixelsPerUnit, RenderTexture renderTexture, ref RenderTexture __result, out DrawerState __state)
@@ -155,20 +161,30 @@ namespace LXIUM_mahosaba
                     var comps = drawer.transform.GetComponentsInChildren<SpriteRenderer>(true);
                     var objects = new GameObject[comps.Length];
                     for (int i = 0; i < comps.Length; i++) objects[i] = comps[i].gameObject;
-                    __state = new DrawerState { Renderers = comps, Objects = objects, Slot = _nextSlot++ & 3, Name = drawer.transform.root.name };
+                    __state = new DrawerState { Renderers = comps, Objects = objects, Name = drawer.transform.root.name, Root = drawer.transform.gameObject };
                     Drawers[key] = __state;
                 }
                 float now = Time.unscaledTime;
                 bool due = now - __state.LastDraw >= RefreshInterval;
-                // 식은 캐릭터는 자기 차례(4프레임에 한 번)가 아니면 해시 없이 지난 그림을 씀
-                if (ChangeOnly && FastDetect && !due && now >= __state.HotUntil && now >= _allHotUntil
-                    && renderTexture != null && renderTexture.Pointer == __state.Texture
-                    && ((Time.frameCount + __state.Slot) & 3) != 0)
+                bool rtSame = renderTexture != null && renderTexture.Pointer == __state.Texture;
+                bool refreshNow = false, polled = false;
+                bool rootActive = __state.Root != null && __state.Root.activeInHierarchy;
+                if (ChangeOnly && FastDetect && rtSame && __state.Epoch == _epoch && pixelsPerUnit == __state.Ppu && rootActive == __state.RootActive)
                 {
-                    LayerSkips++;
-                    __result = renderTexture;
-                    return false;
+                    // 외형 이벤트가 없었음: 안전 갱신 차례나 확인 차례가 아니면 해시 없이 지난 그림
+                    refreshNow = due && TakeRefreshSlot(ref _layerRefreshFrame);
+                    polled = !refreshNow && now - __state.LastCheck >= PollInterval && TakeRefreshSlot(ref _pollFrame);
+                    if (!refreshNow && !polled)
+                    {
+                        LayerSkips++;
+                        __result = renderTexture;
+                        return false;
+                    }
                 }
+                __state.Epoch = _epoch;
+                __state.LastCheck = now;
+                __state.Ppu = pixelsPerUnit;
+                __state.RootActive = rootActive;
                 long hash;
                 // 프리팹 렌더러가 파괴됐는데 ClearLayers를 거치지 않은 경우: 상태를 버리고 원래대로 그림
                 try { hash = LayerHash(__state, pixelsPerUnit); }
@@ -179,10 +195,10 @@ namespace LXIUM_mahosaba
                     __state = new DrawerState();
                     return true;
                 }
-                bool same = hash == __state.Hash && renderTexture != null && renderTexture.Pointer == __state.Texture;
-                if (!same) __state.HotUntil = now + HotTime;
+                bool same = hash == __state.Hash && rtSame;
+                if (!same && polled) _diagMissed++;
                 if (!same && Settings.LayerDiag.Value) DiagNote(__state, renderTexture);
-                if (ChangeOnly && same && (!due || !TakeRefreshSlot(ref _layerRefreshFrame)))
+                if (ChangeOnly && same && !refreshNow && (!due || !TakeRefreshSlot(ref _layerRefreshFrame)))
                 {
                     LayerSkips++;
                     __result = renderTexture;
@@ -209,6 +225,31 @@ namespace LXIUM_mahosaba
                 TextureVersions.TryGetValue(__result.Pointer, out int v);
                 TextureVersions[__result.Pointer] = v + 1;
             }
+        }
+
+        // 외형 이벤트: 이 넷 중 하나가 불리면 모든 캐릭터가 다음 합성 때 해시로 확인함 (바뀐 캐릭터만 다시 그려짐)
+        [HarmonyPatch(typeof(LayeredActorBehaviour), nameof(LayeredActorBehaviour.ApplyComposition))]
+        static class ApplyCompositionPatch
+        {
+            static void Postfix() => _epoch++;
+        }
+
+        [HarmonyPatch(typeof(LayeredActorBehaviour), nameof(LayeredActorBehaviour.NotifyPerceivedVisibilityChanged))]
+        static class VisibilityPatch
+        {
+            static void Postfix() => _epoch++;
+        }
+
+        [HarmonyPatch(typeof(LayeredActorBehaviour), nameof(LayeredActorBehaviour.RebuildLayers))]
+        static class RebuildLayersPatch
+        {
+            static void Postfix() => _epoch++;
+        }
+
+        [HarmonyPatch(typeof(LayeredRendererLayer), nameof(LayeredRendererLayer.Enabled), MethodType.Setter)]
+        static class LayerEnabledPatch
+        {
+            static void Postfix() => _epoch++;
         }
 
         // Dispose와 레이어 재구성 모두 ClearLayers를 거침 (Dispose는 다른 함수와 코드가 합쳐져 있어 직접 패치하지 않음)
@@ -238,7 +279,7 @@ namespace LXIUM_mahosaba
                     Plugin.L.LogWarning("copy hash 실패, 원래 경로로 그림: " + e.Message);
                     return true;
                 }
-                finally { RenderLab.ModTicks += Stopwatch.GetTimestamp() - t; }
+                finally { ModProf.Add(ModProf.Slot.Copy, t); }
             }
 
             static bool Decide(TransitionalRenderer renderer, RenderTexture texture)
@@ -276,7 +317,6 @@ namespace LXIUM_mahosaba
                 }
                 // 전환·색 변화가 시작됨 → 레이어 캐릭터를 잠시 모두 매 프레임 검사.
                 // 내용 버전만 바뀐 경우(1초 안전 갱신 포함)는 해당 없음
-                if (s.Inputs != inputs) _allHotUntil = now + HotTime;
                 // 안전 갱신(입력이 같음)은 알리지 않음. 법정 카메라는 자기 안전 갱신으로 따라감
                 if (s.Hash != h) StageRender.Dirty = true;
                 s.Inputs = inputs;

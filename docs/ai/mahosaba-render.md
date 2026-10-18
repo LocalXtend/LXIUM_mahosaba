@@ -115,6 +115,21 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | D8 | 캐릭터 첫 합성: 8K 아틀라스 업로드·RT 만들기(`CreateTexture2D` 0.8 s/로딩), 번들 LZ4·crunch 풀기 | 비동기 업로드 버퍼(16 MB → 아틀라스 크기)·시간 조각 조정 실험 | 후보 (로그: `priority=BelowNormal uploadSlice=2ms uploadBuffer=16MB`) |
 | D9 | `SaveLoadUi.OnShow` 페이지 칸 `Instantiate` | — | 게임 UI 구조 |
 
+### E. 모드 자체 비용 줄이기 (0.6.1)
+
+진단 설정 `Debug.LayerDiag`의 부분별 시간(`ModProf`, 1080p 전체 화면 재판 대화·심문, 프레임당):
+
+| 부분 | 0.6.0 | 0.6.1 |
+|---|---|---|
+| 캐릭터 변화 확인 (`DrawLayers` 앞, 11번) | 0.22~0.34 ms | **0.035 ms** |
+| 전환 복사 확인 (`RenderToTexture` 앞, 12번) | 0.10 ms | 0.10 ms |
+| 무대 (`LateTick`) | 0.085 ms | 0.09 ms |
+| `Update` | 0.055 ms | 0.055 ms |
+| 안전 다시 합성 (1.5~2 ms짜리) | 초당 11번 | 초당 약 1번 |
+
+- E1 **외형 이벤트 감지** (`Character.FastDetect`의 뜻을 바꿈): 레이어 해시를 4프레임마다 돌려 가며 계산하던 것을, Naninovel이 외형을 바꿀 때만 계산. 이벤트 = `LayeredActorBehaviour.ApplyComposition`·`RebuildLayers`·`NotifyPerceivedVisibilityChanged` 뒤, `LayeredRendererLayer.Enabled` 설정 뒤에 올리는 번호 + 캐릭터 루트의 `activeInHierarchy`(루트가 켜질 때는 이벤트가 없어 1번 놓쳤음 → 추가) + 합성 RT·PPU. 번호가 그대로면 해시 없이 지난 그림. 놓친 변화 대비로 캐릭터마다 2초에 한 번 해시 확인(프레임당 최대 하나), 같은 그림 다시 합성(안전 갱신)은 10초로 늘림 (끄면 1초)
+- 검증: 진단 로그의 `missedByEvents`(확인 검사에서야 발견된 변화) 불러오기·재판·심문 내내 0 [관찰]
+
 ### 채택하지 않는 것
 
 | 힌트 | 이유 |
@@ -161,10 +176,11 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Stage.HalfRate` | false | 카메라가 멈춰 있을 때 불·캐릭터 변화가 반 박자 늦음. `CourtChangeOnly`와 함께면 불처럼 매 프레임 바뀌는 장면에서만 차이 |
 | `Stage.CourtLite` | true (0.3.2) | 원본과 같아야 함 (그림자·SSAO·반사 프로브가 원래 없는 법정). D3D11 전용 |
 | `Stage.FireLite` | true (0.2.1) | 불 쿼드가 벽·바닥과 닿는 경계가 또렷해질 수 있음. 실제 불 연출에서 자세히 보면 원본과 조금 다름 (사용자 확인). D3D11 전용 |
-| `Character.FastDetect` | true (0.4.0) | 놓친 변화는 최대 3프레임 늦음 |
+| `Character.FastDetect` | true (0.4.0, 0.6.1부터 외형 이벤트 감지 E1) | 이벤트로 못 잡은 변화는 최대 2초 늦음 (검증 중 0번) |
 | `Stage.CourtChangeOnly` | true (0.5.1) | 감지한 변화는 같은 프레임에 반영. 감지하지 못한 변화(법정 밖 연출 등)는 최대 1초 늦음. 불이 켜져 있으면 매 프레임 그림 |
 | `Text.FastGlyphs` | true (0.6.0) | 동적으로 더해지는 글자에 합자·커닝이 적용되지 않음. 한글 음절은 합자가 없음 |
 | `Debug.LayerDiag` | false (0.6.0) | — (분석용 로그) |
+| `Debug.GpuTimer` | false (0.6.1) | — (분석용. 카메라별 GPU 시간) |
 | `Debug.RenderLab` | false | — |
 
 0.2.1 기본값은 4차 측정으로 정함. 이전 버전의 설정 파일에는 옛 기본값(false/StageOnly)이 적혀 있어 그대로 남으므로, 업데이트한 사용자는 직접 바꿔야 함 (BepInEx는 파일에 있는 값을 우선)
@@ -187,7 +203,10 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 1. 추적: `wpr -start tools\Prof\lite.wprp!Lite -filemode` → 게임 조작 → `wpr -stop out.etl` (관리자). `lite.wprp` = CPU 샘플(스택) + DXGI Present 이벤트만. 기본 `CPU` 프로필은 문맥 전환 스택 때문에 Unity 잡 스레드가 많으면 추적 자체가 게임을 크게 느리게 함(7.7 GB, 스택 걷기 19%)
 2. 기호: UnityPlayer.dll은 Unity 심볼 서버(`https://symbolserver.unity3d.com`)에 릴리스 플레이어 PDB가 있음 (`UnityPlayer_Win64_player_il2cpp_x64.pdb`, 22.8 MB). GameAssembly.dll은 PDB가 없어 Cpp2IL로 메서드 주소표(9.5만 개)를 만듦 (`Prof map`)
 3. 분석 (`tools/Prof`, TraceProcessor): `frames` = Present 간격으로 프레임 시간 통계·긴 프레임 목록, `tree` = 구간의 메인 스레드 호출 트리, `cpu` = 구간의 함수별 합계, `timeline` = 스레드별 CPU 사용
-4. 진단 설정 `Debug.LayerDiag`: 5초마다 캐릭터 합성 횟수·원인(바뀐 레이어·항목)·원래 합성 시간, D2 색인 조회 수·시간을 로그에 남김
+4. 진단 설정 `Debug.LayerDiag`: 5초마다 캐릭터 합성 횟수·원인(바뀐 레이어·항목)·원래 합성 시간·이벤트로 못 잡은 변화 수, D2 색인 조회 수·시간, 모드 부분별 프레임당 시간(`ModProf`)을 로그에 남김
+5. **GPU 타이머** `Debug.GpuTimer` (0.6.1): D3D11 타임스탬프 쿼리를 카메라 렌더 앞뒤에 넣어 카메라별 GPU 시간을 5초마다 로그·화면 패널에. 쿼리는 Unity 렌더 스레드에서 써야 해서 `CommandBuffer.IssuePluginEvent` + `Graphics.ExecuteCommandBuffer`로 렌더 순서에 끼움 (URP 콜백이 넘겨준 `ScriptableRenderContext`로 `ExecuteCommandBuffer`를 부르면 interop 접근 위반으로 게임이 시작하자마자 꺼졌음). 결과는 4프레임 뒤에 읽어 GPU를 기다리지 않음
+6. **RenderDoc 메모**: Steam 게임이라 exe를 직접 켜면 Steam이 다시 실행해 주입이 풀림 → 잴 때만 게임 폴더에 `steam_appid.txt`(3101040)를 두고 끝나면 지움. 이렇게 켜도 **BepInEx가 로드되지 않음**(로그가 갱신되지 않음, RenderDoc과 doorstop이 둘 다 시작 단계를 가로채는 것으로 보임) → 캡처는 모드 없는 원래 게임의 프레임. F12는 Steam 스크린샷 키와 겹치고, PrintScreen은 Windows 캡처 도구를 엶. 분석 스크립트 `tools/Prof/rdc_frame.py`(qrenderdoc `--python`, 첫 실행 안내창을 끄는 설정 필요)
+
 
 ## 8. 미확인
 

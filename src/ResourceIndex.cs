@@ -84,6 +84,7 @@ namespace LXIUM_mahosaba
             {
                 _calls++;
                 _ticks += Stopwatch.GetTimestamp() - t;
+                ModProf.Add(ModProf.Slot.Index, t);
             }
         }
 

@@ -4,6 +4,7 @@
     <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>LXIUM_mahosaba</AssemblyName>
     <RootNamespace>LXIUM_mahosaba</RootNamespace>
     <Product>LXIUM mahosaba</Product>
