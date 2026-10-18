@@ -61,6 +61,7 @@ namespace LXIUM_mahosaba
         static Quaternion[] _lastRot;
         static float[] _lastFov;
         static UniversalAdditionalCameraData _main;
+        static Camera _mainCam;
         // 장면 버전: 바뀐 프레임마다 1 증가. 카메라마다 마지막으로 그린 버전(-1 = 지난 그림이 맞지 않음)과 시각
         static int _version;
         static int[] _drawnVersion, _drawnFrame;
@@ -125,8 +126,6 @@ namespace LXIUM_mahosaba
             var rt = n > 0 ? _cameras[0]?.targetTexture : null;
             _origAa = rt != null ? rt.antiAliasing : 1;
             Plugin.L.LogInfo($"stage cameras={n} rt={rt?.width}x{rt?.height} msaa={_origAa} post={(n > 0 && _origPost[0])}");
-            // 게임 스크립트가 화면 모양을 바꾼 뒤, UI 그래픽을 다시 만들기 전에 마스크를 정함 (그 프레임부터 맞게 그려짐)
-            Canvas.add_preWillRenderCanvases((Canvas.WillRenderCanvases)(Action)UpdateMasks);
             return true;
         }
 
@@ -141,9 +140,9 @@ namespace LXIUM_mahosaba
             if (_presented is not bool presented) return;
             if (ChangeOnly)
             {
-                long t = Stopwatch.GetTimestamp();
+                long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
                 if (SceneChanged()) _version++;
-                ModProf.Add(ModProf.Slot.Court, t);
+                ModProf.Add(ModProf.Slot.Court, t, a);
             }
             float now = Time.unscaledTime;
             for (int i = 0; i < _cameras.Length; i++)
@@ -291,9 +290,11 @@ namespace LXIUM_mahosaba
         }
 
         // 법정 화면 마스크: 화면을 덮는 사각형이면 잘라낼 것이 없으므로 스텐실 마스크(화면 전체 스텐실 쓰기 2번)를 끔
-        static void UpdateMasks()
+        // FrameHook이 UI 그래픽을 다시 만들기 전마다 부름: 게임 스크립트가 화면 모양을 바꾼 프레임부터 마스크가 맞게 그려짐
+        internal static void UpdateMasks()
         {
-            long t = Stopwatch.GetTimestamp();
+            if (_masks == null) return;
+            long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < _masks.Length; i++)
             {
                 var m = _masks[i];
@@ -319,7 +320,7 @@ namespace LXIUM_mahosaba
                 _maskOff[i] = off;
                 if (Settings.LayerDiag.Value) Plugin.L.LogInfo($"stage screen {i} mask {(off ? "끔" : "켬")} quad={_quads[i]._x} {_quads[i]._y} {_quads[i]._z} {_quads[i]._w}");
             }
-            ModProf.Add(ModProf.Slot.Masks, t);
+            ModProf.Add(ModProf.Slot.Masks, t, a);
         }
 
         static bool Covers(int i)
@@ -393,7 +394,12 @@ namespace LXIUM_mahosaba
         {
             bool changed = false;
             bool needDepth = UrpTuning.Ssao == SsaoMode.Off && !CourtShaders.Fire.Active;
-            if (_main == null) _main = Camera.main?.GetComponent<UniversalAdditionalCameraData>();
+            if (_main == null)
+            {
+                _mainCam = Camera.main;
+                _main = _mainCam?.GetComponent<UniversalAdditionalCameraData>();
+            }
+            UrpTuning.ApplyMsaa(_mainCam);
             // 메인 카메라 후처리(색 보정 LUT + FXAA): 볼륨 효과가 0이라 하는 일은 FXAA뿐인데 1080p에서 GPU 1.3 ms (15차).
             // 끄면 아래에서 무대 카메라가 자기 FXAA를 켜서 법정 가장자리는 그대로. 스프라이트·UI·SDF 글자는 가장자리가 이미 부드러움
             if (_main != null)

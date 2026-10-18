@@ -75,9 +75,9 @@ namespace LXIUM_mahosaba
         {
             static bool Prefix(RevealFader __instance, out Call __state)
             {
-                long start = Stopwatch.GetTimestamp();
+                long start = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
                 try { return Run(__instance, out __state); }
-                finally { ModProf.Add(ModProf.Slot.Text, start); }
+                finally { ModProf.Add(ModProf.Slot.Text, start, a); }
             }
 
             static bool Run(RevealFader __instance, out Call __state)
@@ -147,7 +147,7 @@ namespace LXIUM_mahosaba
 
             static void Postfix(Call __state)
             {
-                long start = Stopwatch.GetTimestamp();
+                long start = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
                 // 완성된 최종 알파를 원본이 한 번 적용한 다음 프레임부터 재사용.
                 if (__state.Candidate != null && __state.Stamp.Revision == _revision)
                 {
@@ -155,7 +155,7 @@ namespace LXIUM_mahosaba
                     __state.Candidate.Settled = true;
                 }
                 if (__state.Start != 0) _ticks += Stopwatch.GetTimestamp() - __state.Start;
-                ModProf.Add(ModProf.Slot.Text, start);
+                ModProf.Add(ModProf.Slot.Text, start, a);
             }
         }
 

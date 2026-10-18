@@ -36,6 +36,7 @@ switch (args.Length > 0 ? args[0] : "")
     {
         "Steamworks.CallbackDispatcher::RunFrame", "LeTai.TrueShadow.TrueShadow::LateUpdate",
         "LeTai.TrueShadow.TrueShadow::OnWillRenderCanvas", "UnityEngine.InputSystem.UI.InputSystemUIInputModule::PerformRaycast",
+        "UnityEngine.UI.CanvasUpdateRegistry::PerformUpdate",
     }); break;
     // Canvas null-cache research targets; these are not installed runtime features.
     case "check-canvas-hooks": HookCheck.Run(args[1], new[]
@@ -47,6 +48,8 @@ switch (args.Length > 0 ? args[0] : "")
     // 게임 메서드 읽기: isil <게임 폴더> <형식::메서드>...
     case "isil": HookCheck.Isil(args[1], args[2..]); break;
     case "cpu": await Cpu(args); break;
+    // 관리 힙 할당 형식별 합계 (alloc.wprp로 잰 추적): alloc <etl>
+    case "alloc": Alloc(args[1]); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
     case "frames": await Frames(args); break;
     case "tree": await Tree(args); break;
@@ -325,6 +328,33 @@ static void Top(Dictionary<string, double> d, double all, int n)
         Console.WriteLine($"{v,9:F1} ms {v / all * 100,5:F1}%  {(k.Length > 150 ? k[..150] : k)}");
 }
 
+
+static void Alloc(string etl)
+{
+    using var trace = TraceProcessor.Create(etl);
+    var clr = new Guid("e13c0d23-ccbc-4e12-931b-d9cc2eee27e4");
+    var bytes = new Dictionary<string, long>();
+    int gcs = 0;
+    // 이 버전의 이벤트 정의가 OS 매니페스트에 없어 이벤트 원본 바이트를 GCAllocationTick_V4 배치대로 직접 읽음:
+    // AllocationAmount(4) AllocationKind(4) ClrInstanceID(2) AllocationAmount64(8) TypeID(8) TypeName(UTF-16, 0으로 끝남)
+    trace.Use(new[] { clr }, context =>
+    {
+        var ev = context.Event;
+        // 1 = GCStart, 10 = GCAllocationTick
+        if (ev.Id == 1) { gcs++; return; }
+        if (ev.Id != 10) return;
+        var data = ev.Data;
+        if (data.Length < 28) return;
+        long amount = (long)BitConverter.ToUInt64(data.Slice(10, 8));
+        int end = 26;
+        while (end + 1 < data.Length && (data[end] != 0 || data[end + 1] != 0)) end += 2;
+        string type = System.Text.Encoding.Unicode.GetString(data.Slice(26, end - 26));
+        bytes[type] = bytes.GetValueOrDefault(type) + amount;
+    });
+    trace.Process();
+    Console.WriteLine($"GC {gcs}번");
+    foreach (var (k, v) in bytes.OrderByDescending(x => x.Value).Take(40)) Console.WriteLine($"{v / 1024,10} KB  {k}");
+}
 
 static void Sym(string dll, string symDir, ulong[] offsets)
 {

@@ -42,7 +42,6 @@ namespace LXIUM_mahosaba
                     _origBlur = _ssaoSettings.BlurQuality;
                 }
             }
-            RenderPipelineManager.add_beginCameraRendering((Action<ScriptableRenderContext, Camera>)OnBeginCamera);
             RenderLab.ApplySettings();
             Plugin.L.LogInfo($"urp asset={asset.name} msaa={asset.msaaSampleCount} intermediate={_origIntermediate} ssao={_ssao != null}");
             return true;
@@ -61,6 +60,11 @@ namespace LXIUM_mahosaba
                 _ssaoSettings.Samples = lite ? ScreenSpaceAmbientOcclusionSettings.AOSampleOption.Low : _origSamples;
                 _ssaoSettings.BlurQuality = lite ? ScreenSpaceAmbientOcclusionSettings.BlurQualityOptions.Low : _origBlur;
             }
+            // SSAO를 카메라마다 다르게 켜야 할 때(법정만)만 카메라 콜백을 붙임. 콜백은 카메라마다 interop 래퍼를 만들어
+            // 관리 힙에 할당이 쌓이고 GC가 메인 스레드를 멈춤 (22차: 프레임당 약 50 B, GC 할당의 30%)
+            bool perCamera = _ssao != null && ssao is SsaoMode.StageOnly or SsaoMode.StageLite;
+            HookCameras(perCamera);
+            if (_ssao != null && !perCamera && _ssao.isActive != (ssao == SsaoMode.Game)) _ssao.SetActive(ssao == SsaoMode.Game);
             if (_data == null) return;
             var mode = intermediateAuto ? IntermediateTextureMode.Auto : _origIntermediate;
             if (_data.m_IntermediateTextureMode == mode) return;
@@ -68,21 +72,41 @@ namespace LXIUM_mahosaba
             _data.SetDirty();
         }
 
-        // URP는 카메라마다 렌더 직전에 beginCameraRendering을 부른 뒤 카메라 데이터(MSAA 등)를 만들고
-        // 기능 목록의 isActive를 본다. 그래서 여기서 카메라별로 정한다.
-        // - MSAA: 직교 카메라(메인·캐릭터 합성)만 끔. 무대 카메라는 RT의 MSAA를 따름
-        // - SSAO: 렌더러 단위 기능이라 카메라별 설정이 없어 켜고 끄기를 카메라마다 바꿈
+        static Il2CppSystem.Action<ScriptableRenderContext, Camera> _onBegin;
+
+        static void HookCameras(bool on)
+        {
+            if (on == (_onBegin != null)) return;
+            if (on)
+            {
+                _onBegin = (Action<ScriptableRenderContext, Camera>)OnBeginCamera;
+                RenderPipelineManager.add_beginCameraRendering(_onBegin);
+            }
+            else
+            {
+                RenderPipelineManager.remove_beginCameraRendering(_onBegin);
+                _onBegin = null;
+            }
+        }
+
+        // 직교 카메라(메인·캐릭터 합성)의 MSAA 끄기. 무대 카메라는 RT의 MSAA를 따름.
+        // 메인 카메라는 StageRender가 16프레임마다, 캐릭터 합성 카메라는 ActorRender가 합성할 때 부름
+        internal static void ApplyMsaa(Camera cam)
+        {
+            if (!ReferenceEquals(cam, null) && cam.orthographic && cam.allowMSAA == MsaaOff) cam.allowMSAA = !MsaaOff;
+        }
+
+        // URP는 카메라마다 렌더 직전에 beginCameraRendering을 부른 뒤 기능 목록의 isActive를 본다.
+        // SSAO는 렌더러 단위 기능이라 카메라별 설정이 없어 켜고 끄기를 카메라마다 바꿈 (법정만 켜는 설정일 때만 붙음)
         static void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
-            long t = Stopwatch.GetTimestamp();
-            RenderLab.CountCamera();
-            if (cam.orthographic && cam.allowMSAA == MsaaOff) cam.allowMSAA = !MsaaOff;
+            long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
             if (_ssao != null)
             {
                 bool active = Ssao == SsaoMode.Game || (StageRender.IsStageCamera(cam) && Ssao is SsaoMode.StageOnly or SsaoMode.StageLite);
                 if (_ssao.isActive != active) _ssao.SetActive(active);
             }
-            ModProf.Add(ModProf.Slot.Camera, t);
+            ModProf.Add(ModProf.Slot.Camera, t, a);
         }
     }
 }

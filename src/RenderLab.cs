@@ -19,6 +19,7 @@ namespace LXIUM_mahosaba
         const float Settle = 2f, Sample = 6f;
         static readonly string Dir = Path.Combine(Paths.BepInExRootPath, "LXIUM_mahosaba");
 
+        // GPU 타이머의 카메라 콜백이 셈 (꺼져 있으면 0)
         static int _cameraRenders;
         // 모드가 매 프레임 쓰는 메인 스레드 시간 (패치·Host·카메라 콜백). Stopwatch 틱
         internal static long ModTicks;
@@ -307,7 +308,8 @@ namespace LXIUM_mahosaba
                 // 안내 상자(IMGUI)는 프레임당 약 0.13 ms라 측정 동안은 숨김 (17차)
                 Status = null;
                 times.Clear();
-                long mod = ModTicks;
+                long mod = ModTicks, alloc0 = GC.GetAllocatedBytesForCurrentThread();
+                int gc0 = GC.CollectionCount(0);
                 double gpu0 = GpuTimer.TotalMs, main0 = GpuTimer.Cameras.GetValueOrDefault("MainCamera").Ms;
                 int gpuFrames0 = GpuTimer.Frames;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
@@ -320,7 +322,8 @@ namespace LXIUM_mahosaba
                     yield return null;
                 }
                 int frames = times.Count;
-                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
+                string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms" +
+                               $" alloc={(GC.GetAllocatedBytesForCurrentThread() - alloc0) / frames}B gc={GC.CollectionCount(0) - gc0}";
                 int gpuFrames = GpuTimer.Frames - gpuFrames0;
                 if (GpuTimer.Active && gpuFrames > 0)
                     extra += $" gpu={(GpuTimer.TotalMs - gpu0) / gpuFrames:F3}ms mainCam={(GpuTimer.Cameras.GetValueOrDefault("MainCamera").Ms - main0) / gpuFrames:F3}ms";

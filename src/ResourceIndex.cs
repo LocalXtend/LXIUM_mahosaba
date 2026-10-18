@@ -61,7 +61,7 @@ namespace LXIUM_mahosaba
         static byte Detour(IntPtr self, IntPtr path, IntPtr method)
         {
             if (path == IntPtr.Zero) return _original(self, path, method);
-            long t = Stopwatch.GetTimestamp();
+            long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
             try
             {
                 byte result;
@@ -84,7 +84,7 @@ namespace LXIUM_mahosaba
             {
                 _calls++;
                 _ticks += Stopwatch.GetTimestamp() - t;
-                ModProf.Add(ModProf.Slot.Index, t);
+                ModProf.Add(ModProf.Slot.Index, t, a);
             }
         }
 

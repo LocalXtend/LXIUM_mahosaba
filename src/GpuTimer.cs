@@ -122,6 +122,8 @@ namespace LXIUM_mahosaba
 
         static void OnBeginCamera(ScriptableRenderContext ctx, Camera cam)
         {
+            // 실험실의 프레임당 카메라 렌더 수 (GPU 타이머가 켜져 있을 때만 셈)
+            RenderLab.CountCamera();
             if (_failed || _slot < 0 || _frame != Time.frameCount || _tailIssued) return;
             int m = MarkCount[_slot];
             if (m + 2 > MaxMarks) return;

@@ -154,9 +154,9 @@ namespace LXIUM_mahosaba
         {
             static bool Prefix(LayeredDrawer __instance, float pixelsPerUnit, RenderTexture renderTexture, ref RenderTexture __result, out DrawerState __state)
             {
-                long t = Stopwatch.GetTimestamp();
+                long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
                 try { return Run(__instance, pixelsPerUnit, renderTexture, ref __result, out __state); }
-                finally { ModProf.Add(ModProf.Slot.Layers, t); }
+                finally { ModProf.Add(ModProf.Slot.Layers, t, a); }
             }
 
             static bool Run(LayeredDrawer drawer, float pixelsPerUnit, RenderTexture renderTexture, ref RenderTexture __result, out DrawerState __state)
@@ -212,6 +212,8 @@ namespace LXIUM_mahosaba
                 }
                 __state.Hash = hash;
                 if (same) { _diagRefreshes++; DiagRefreshed.Add(key); }
+                // 합성 카메라의 MSAA는 합성하는 프레임에만 맞춤 (Urp.MsaaOff)
+                UrpTuning.ApplyMsaa(drawer.camera);
                 _diagStart = Stopwatch.GetTimestamp();
                 return true;
             }
@@ -274,7 +276,7 @@ namespace LXIUM_mahosaba
         {
             static bool Prefix(TransitionalRenderer __instance, RenderTexture texture)
             {
-                long t = Stopwatch.GetTimestamp();
+                long t = Stopwatch.GetTimestamp(), a = System.GC.GetAllocatedBytesForCurrentThread();
                 var key = __instance.Pointer;
                 try
                 {
@@ -290,7 +292,7 @@ namespace LXIUM_mahosaba
                     Plugin.L.LogWarning("copy hash 실패, 원래 경로로 그림: " + e.Message);
                     return true;
                 }
-                finally { ModProf.Add(ModProf.Slot.Copy, t); }
+                finally { ModProf.Add(ModProf.Slot.Copy, t, a); }
             }
 
             static bool Decide(TransitionalRenderer renderer, RenderTexture texture, CopyState s)

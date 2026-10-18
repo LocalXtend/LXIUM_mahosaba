@@ -156,8 +156,13 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | 모드 코드·스택을 못 푼 부분 | 약 20% |
 
 - G1 **Steam 콜백 빈도 제한** (`Cpu.SteamThrottle`): `Steamworks.CallbackDispatcher.RunFrame` 프리픽스로 초당 60번까지만 (매번 Steam 클라이언트 파이프를 `PeekNamedPipe`로 확인). Steam은 콜백을 쌓아 두었다가 다음 호출에 주므로 최대 16 ms 늦을 뿐. 341.6 → 345.5 fps [관찰: 17차]
-- G2 **UI 마우스 검사 재사용** (`Cpu.RaycastReuse`): `InputSystemUIInputModule.PerformRaycast`(1A573B0, ICF 검사 통과) 프리픽스. 같은 포인터·같은 위치·마우스 버튼과 휠 변화 없음·16 ms 안이면 모듈이 `eventData.pointerCurrentRaycast`에 보관한 지난 결과를 그대로 돌려줌 (모듈은 이 값을 다시 `pointerCurrentRaycast`에 넣으므로 들어가기·나가기 이벤트 없음). 맞힌 오브젝트가 파괴됐으면(래퍼는 있는데 Unity 객체 없음) 새로 검사. 360.7 → 372~374 fps [관찰: 18차]. 대사 클릭 진행·Auto 버튼·불러오기 메뉴 동작 확인 [관찰]
+- G2 **UI 마우스 검사 재사용** (`Cpu.RaycastReuse`): `InputSystemUIInputModule.PerformRaycast`(1A573B0, ICF 검사 통과). 처음엔 Harmony 프리픽스, 22차부터 네이티브 훅(G5). 같은 포인터·같은 위치·마우스 버튼과 휠 변화 없음·16 ms 안이면 모듈이 `eventData.pointerCurrentRaycast`에 보관한 지난 결과를 그대로 돌려줌 (모듈은 이 값을 다시 `pointerCurrentRaycast`에 넣으므로 들어가기·나가기 이벤트 없음). 맞힌 오브젝트가 파괴됐으면(래퍼는 있는데 Unity 객체 없음) 새로 검사. 360.7 → 372~374 fps [관찰: 18차]. 대사 클릭 진행·Auto 버튼·불러오기 메뉴 동작 확인 [관찰]
   - 첫 구현(`EventSystem.RaycastAll`에서 결과 목록을 모드의 IL2CPP List에 복사해 두고 다시 채움)은 시작하자마자 `GameObject.get_transform` 접근 위반으로 꺼졌음 → 결과를 직접 보관하지 않는 방식으로 바꿈
+- G5 **관리 힙 할당 없애기 (GC 끊김)** (22차): 정지 장면에서도 30~60초마다 4~25 ms 프레임이 있었고, ETW 스택은 BepInEx 런타임(CoreCLR)의 GC(`gc_heap::garbage_collect` ← `JIT_New`, 종료자 검사·압축 포함) [관찰: `t24`]. 모드가 메인 스레드에서 프레임당 0.52 KB(GPU 타이머 진단 켬) / 0.18 KB(끔) 할당. `alloc.wprp`(GCAllocationTick) + `Prof alloc`으로 형식별로 보니 [관찰: 60초, `a1`]:
+  - `RaycastResult` 1.45 MB + `NativeStructWrapper` 1.35 MB: G2의 Harmony 패치가 참조가 든 구조체(RaycastResult)를 interop 래퍼로 주고받음 → **네이티브 훅으로 바꿈**. `PerformRaycast`는 구조체 반환이라 rcx = 반환 버퍼, rdx = this, r8 = eventData이고, 호출자가 결과 80바이트를 eventData+0x50(`pointerCurrentRaycast`)에 복사함 [관찰: ISIL]. 재사용할 때는 그 80바이트를 반환 버퍼로 메모리 복사. 필드 위치·크기는 IL2CPP 메타데이터로 확인하고 다르면 걸지 않음. 맞힌 GameObject가 파괴됐는지는 `m_CachedPtr`(+0x10)가 0인지로 봄
+  - `Camera` 1.24 MB: `UrpTuning`의 카메라 시작 콜백이 카메라마다 래퍼를 만듦 → 콜백은 SSAO를 카메라마다 달리 켜야 할 때(StageOnly·StageLite)만 붙이고, 직교 카메라 MSAA는 메인 카메라는 무대 16프레임 확인에서, 캐릭터 합성 카메라는 합성하는 프레임에 맞춤. 실험실의 프레임당 카메라 수는 GPU 타이머가 켜져 있을 때만 셈
+  - 남은 `NativeStructWrapper`(프레임당 약 72 B): 엔진이 주입된 관리 메서드(`Host.Update`·`LateUpdate`, `preWillRenderCanvases` 대리자)를 부를 때마다 interop 호출기가 약 24 B씩 할당 [관찰: 모드 일 사이 할당 48 + 24 B] → **프레임 진입점을 하나로**: `CanvasUpdateRegistry.PerformUpdate`(21E6830, ICF 검사 통과, `Canvas.willRenderCanvases`로 프레임마다 불림)를 네이티브로 가로채 원래 일 앞에서 모드의 프레임 일(옛 Update·LateUpdate)을 하고, 법정 화면 마스크(F2)를 정함. `Canvas.ForceUpdateCanvases`로 한 프레임에 여러 번 불릴 수 있어 프레임 일은 처음 한 번만, 마스크는 매번. 훅을 못 걸면 대리자로 대신함. `Host`는 코루틴용으로만 남음
+  - 결과: 모드 할당 프레임당 약 0 B(진단 로그 0.01 KB, 실험실 구간 57 B는 실험실 코루틴), 실험실 3분 25초 동안 GC 0번 [관찰: 22차]
 - G3 **법정 재질 수집을 이벤트로** (21차): `CourtShaders`가 1초마다 `Resources.FindObjectsOfTypeAll<Court>`로 법정을 다시 찾았는데, 이 검색이 **3~4 ms**라 1초마다 한 프레임이 튐 [관찰: 단계별 시간 find 2.9~3.7 ms, 재질 모으기 0.24 ms, 법정 목록 0.27~0.31 ms]. `Court.Awake`(3859F0, ICF 검사 통과) 뒤에 그 법정을 목록에 넣고, 1초마다는 알려진 법정이 살아 있는지·어느 쪽이 켜졌는지만 확인. 전체 검색은 게임 시작 직후 한 번(훅보다 먼저 생긴 법정 대비). 설정이 바뀌거나 법정이 생기고 없어지거나 켜진 법정이 바뀔 때만 다시 모음. 법정 렌더러가 파괴돼 변화 검사가 실패하면 다시 모으기를 요청 [관찰: 재판 진입 때 한 번 모음(번들 첫 로드 포함 19 ms, 로딩 화면), 그 뒤 1초마다의 수집 없음, 모드 Update 0.032 → 0.019 ms]
 - G4 **모드 자체 interop 호출 줄이기** (21차): interop의 메서드·속성 호출은 `il2cpp_runtime_invoke`를 거치고, Unity 객체의 `==`·구조체 연산자도 il2cpp 호출이라 비쌈. 필드 읽기는 메모리를 바로 읽음
   - 전환 복사 확인(B2): `FlipX`·`FlipY`·`BlurIntensity`는 자동 속성 backing field로 읽음, 액터 Transform 래퍼를 상태에 캐시, `TryCast<RenderTexture>`(래퍼 생성) 대신 `il2cpp_class_is_assignable_from`, 프레임 시각은 Host.Update가 한 번 읽음 → 프레임당 0.13 → 0.071~0.077 ms(12번). DrawLayers 0.045~0.053 → 0.028 ms(11번)
@@ -217,6 +222,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `16_steamEveryFrame` / `17_current` | Steam 콜백 매 프레임 / 기준. 차이 = G1 효과 |
    | `18_shadowHooked` / `19_shadowFreeze` / `20_noEventSystem` / `21_current` | 진단: UI 그림자 두 메서드에 빈 패치만(경계 비용) / 그림자 갱신 전부 건너뛰기(그림자가 멈춤) / EventSystem 끔(입력 없음). 진단 패치는 이 동안만 붙임 |
    | `22_raycastEveryFrame` / `23_current` | UI 마우스 검사 재사용 끔 / 기준. 차이 = G2 효과 |
+   |  | 모든 줄에 `alloc`(측정 동안 메인 스레드 관리 할당, 프레임당 바이트)·`gc`(gen0 GC 횟수). 0.8.0부터 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)
@@ -286,6 +292,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 8. interop 형식 확인: `ilspycmd -t <형식> BepInEx/interop/<어셈블리>.dll` (`dotnet tool install -g ilspycmd`). 필드·속성 형식만 보임, 메서드 본문은 GameAssembly에 있음
 9. 충돌 주소 풀기 (`Prof sym <dll> <pdb 폴더> <16진 오프셋>`, dbghelp): Windows 이벤트 로그의 `UnityPlayer.dll` 오프셋을 Unity 심볼 서버 PDB로 함수 이름으로. 17차 레이캐스트 재사용 충돌 = `GameObject_Get_Custom_PropTransform+0xA`
 10. 게임 메서드 읽기 (`Prof isil <게임 폴더> <형식::메서드>...`): Cpp2IL로 메서드를 ISIL(호출 대상 이름이 풀린 명령 목록)로 출력. 분기 조건까지 보임
+11. 관리 힙 할당 (0.8.0): `wpr -start tools\Prof\alloc.wprp!Alloc -filemode` → `Prof alloc out.etl`로 형식별 할당량(GCAllocationTick, 약 100 KB마다 형식 이름)과 GC 횟수. 이 런타임 버전의 이벤트 정의가 OS 매니페스트에 없어 이벤트 바이트를 직접 읽음. `Debug.LayerDiag`의 `mod prof` 줄은 부분마다 할당 바이트, `managed alloc` 줄은 프레임당 할당·GC 횟수·힙 크기, `alloc gap`은 모드 프레임 일 사이(엔진·게임·interop 경계)의 할당
 
 
 ## 8. 미확인
