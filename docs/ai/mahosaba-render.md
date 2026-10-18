@@ -158,6 +158,8 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 - G1 **Steam 콜백 빈도 제한** (`Cpu.SteamThrottle`): `Steamworks.CallbackDispatcher.RunFrame` 프리픽스로 초당 60번까지만 (매번 Steam 클라이언트 파이프를 `PeekNamedPipe`로 확인). Steam은 콜백을 쌓아 두었다가 다음 호출에 주므로 최대 16 ms 늦을 뿐. 341.6 → 345.5 fps [관찰: 17차]
 - G2 **UI 마우스 검사 재사용** (`Cpu.RaycastReuse`): `InputSystemUIInputModule.PerformRaycast`(1A573B0, ICF 검사 통과) 프리픽스. 같은 포인터·같은 위치·마우스 버튼과 휠 변화 없음·16 ms 안이면 모듈이 `eventData.pointerCurrentRaycast`에 보관한 지난 결과를 그대로 돌려줌 (모듈은 이 값을 다시 `pointerCurrentRaycast`에 넣으므로 들어가기·나가기 이벤트 없음). 맞힌 오브젝트가 파괴됐으면(래퍼는 있는데 Unity 객체 없음) 새로 검사. 360.7 → 372~374 fps [관찰: 18차]. 대사 클릭 진행·Auto 버튼·불러오기 메뉴 동작 확인 [관찰]
   - 첫 구현(`EventSystem.RaycastAll`에서 결과 목록을 모드의 IL2CPP List에 복사해 두고 다시 채움)은 시작하자마자 `GameObject.get_transform` 접근 위반으로 꺼졌음 → 결과를 직접 보관하지 않는 방식으로 바꿈
+- **경계 비용** (20차): 진단용 TrueShadow 패치 2개를 상시 설치하면 그림자 61개 × 2 = 프레임당 122번 네이티브↔관리 경계를 지나 +0.06 ms(빈 프리픽스만 붙인 `18_shadowHooked` 338.7 fps vs 기준 344~347 fps, 호출 1번에 약 0.5 µs). 0.8.0 개발본에 한동안 상시 설치돼 있었음 → 실험실 프리셋이 측정하는 동안만 `Harmony.Patch`로 붙이고 `UnpatchSelf`로 뗌. 그림자 갱신을 멈춘 `19_shadowFreeze` 368 fps → TrueShadow 원래 비용 약 0.17 ms [관찰]
+- 메인 카메라 그림자 준비 끄기(`renderShadows=false` → 그림자 거리 0 → 컬링에서 ShadowCasters 빠짐, 19차 다른 작업의 후보 1): 354.4 vs 기준 약 354 fps → 효과 없음. 장면의 켜진 조명은 법정 SpotLight 하나이고 원래 `shadows=None` [관찰: 진단 덤프 20차]. 채택 안 함
 - 진단 상한 (18차, 실험실 `18_shadowFreeze`·`19_noEventSystem`, 기준 약 340 fps) [관찰]:
   - UI 그림자 TrueShadow 갱신을 모두 건너뜀: −0.23~0.29 ms (372~375 fps). 켜진 그림자 61개(에셋 포함 805개)
   - EventSystem 끔: −0.12~0.29 ms (358~375 fps)
@@ -191,7 +193,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 
 1. 설정 `Debug.RenderLab = true`
 2. 캐릭터가 나오는 장면(대화) 또는 재판 장면에서 **F10**
-3. 프리셋 23개를 8초씩(안정 2초 + 측정 6초, 약 3분 15초). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
+3. 프리셋 24개를 8초씩(안정 2초 + 측정 6초, 약 3분 25초). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
 
    | 프리셋 | 내용 |
    |---|---|
@@ -207,8 +209,8 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `13_current` | 진단 뒤 기준을 다시 잼 |
    | `14_screenMaskOn` / `15_current` | 법정 화면 마스크 생략 끔 / 기준. 차이 = F2 효과 |
    | `16_steamEveryFrame` / `17_current` | Steam 콜백 매 프레임 / 기준. 차이 = G1 효과 |
-   | `18_shadowFreeze` / `19_noEventSystem` / `20_current` | 진단: UI 그림자 갱신 전부 건너뛰기(그림자가 멈춤) / EventSystem 끔(입력 없음). 기준과의 차이 = 그 비용의 상한 |
-   | `21_raycastEveryFrame` / `22_current` | UI 마우스 검사 재사용 끔 / 기준. 차이 = G2 효과 |
+   | `18_shadowHooked` / `19_shadowFreeze` / `20_noEventSystem` / `21_current` | 진단: UI 그림자 두 메서드에 빈 패치만(경계 비용) / 그림자 갱신 전부 건너뛰기(그림자가 멈춤) / EventSystem 끔(입력 없음). 진단 패치는 이 동안만 붙임 |
+   | `22_raycastEveryFrame` / `23_current` | UI 마우스 검사 재사용 끔 / 기준. 차이 = G2 효과 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)

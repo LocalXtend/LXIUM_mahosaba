@@ -106,13 +106,15 @@ namespace LXIUM_mahosaba
             // Steam 콜백 빈도 제한 끔. 15와의 차이 = 효과
             ("16_steamEveryFrame", () => CpuTuning.SteamThrottle = false),
             ("17_current", null),
-            // 진단: UI 그림자 갱신 전부 건너뛰기 / EventSystem 끄기(측정 동안 입력 없음). 기준과의 차이 = 그 비용의 상한
-            ("18_shadowFreeze", () => CpuTuning.ShadowFreeze = true),
-            ("19_noEventSystem", () => { _diagEvents = UnityEngine.EventSystems.EventSystem.current; if (_diagEvents != null) _diagEvents.enabled = false; }),
-            ("20_current", null),
+            // 진단: UI 그림자(TrueShadow) 두 메서드에 빈 패치만 붙임(경계 비용) / 갱신 전부 건너뜀 / EventSystem 끔(측정 동안 입력 없음).
+            // 기준과의 차이 = 그 비용
+            ("18_shadowHooked", () => CpuTuning.ShadowHooks(true)),
+            ("19_shadowFreeze", () => { CpuTuning.ShadowHooks(true); CpuTuning.ShadowFreeze = true; }),
+            ("20_noEventSystem", () => { _diagEvents = UnityEngine.EventSystems.EventSystem.current; if (_diagEvents != null) _diagEvents.enabled = false; }),
+            ("21_current", null),
             // UI 마우스 검사 재사용 끔. 기준과의 차이 = 효과
-            ("21_raycastEveryFrame", () => CpuTuning.RaycastReuse = false),
-            ("22_current", null),
+            ("22_raycastEveryFrame", () => CpuTuning.RaycastReuse = false),
+            ("23_current", null),
 #endif
         };
 #if DEBUG && LXIUM_UI_BENCH
@@ -175,6 +177,7 @@ namespace LXIUM_mahosaba
             CpuTuning.SteamThrottle = Settings.SteamThrottle.Value;
             CpuTuning.RaycastReuse = Settings.RaycastReuse.Value;
             CpuTuning.ShadowFreeze = false;
+            CpuTuning.ShadowHooks(false);
             // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
             StageRender.Dirty = true;
             StageRender.ResolutionOverride = null;
@@ -239,6 +242,14 @@ namespace LXIUM_mahosaba
                 if (o.Cast<LeTai.TrueShadow.TrueShadow>().isActiveAndEnabled) shadowsOn++;
             }
             Plugin.L.LogInfo($"true shadow: {shadowsOn} 켜짐 / {shadows}");
+            // 켜진 조명의 그림자 설정과 메인 카메라의 그림자 준비 여부 (그림자 컬링 준비를 뺄 수 있는지)
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Light>()))
+            {
+                var l = o.Cast<Light>();
+                if (l.isActiveAndEnabled) Plugin.L.LogInfo($"light {l.name} {l.type} shadows={l.shadows} layer={l.gameObject.layer} cullingMask={l.cullingMask}");
+            }
+            var mainData = Camera.main?.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            Plugin.L.LogInfo($"main camera renderShadows={mainData?.renderShadows} cullingMask={Camera.main?.cullingMask}");
             // UI 레이캐스터마다 캔버스 상태와 검사하는 그래픽 수 (꺼진 Canvas의 그래픽은 depth -1이라 맞지 않음)
             foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<UnityEngine.UI.GraphicRaycaster>()))
             {

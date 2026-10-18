@@ -13,6 +13,7 @@ namespace LXIUM_mahosaba
         internal static bool SteamThrottle, RaycastReuse;
         // 실험실 진단: UI 그림자(TrueShadow)의 변화 추적·다시 그리기를 모두 건너뜀 (그림자가 멈춤). 그 비용의 상한을 잼
         internal static bool ShadowFreeze;
+        static Harmony _diag;
         static readonly long SteamInterval = Stopwatch.Frequency / 60, RaycastInterval = Stopwatch.Frequency / 60;
 
         // Steam 콜백 처리(SteamAPI_RunCallbacks, 0.09 ms: 매번 Steam 클라이언트 파이프를 확인)를 초당 60번까지만.
@@ -81,16 +82,23 @@ namespace LXIUM_mahosaba
             }
         }
 
-        [HarmonyPatch(typeof(LeTai.TrueShadow.TrueShadow), "LateUpdate")]
-        static class ShadowLatePatch
+        // 실험실 진단 패치는 측정하는 동안만 붙임. 상시 설치하면 그림자 61개 × 2 = 프레임당 122번 네이티브↔관리 경계를 지나는
+        // 비용이 늘 붙음 (0.8.0 개발 중 한동안 그랬음). on이면 빈 패치(경계 비용만), freeze면 그림자 갱신을 건너뜀
+        internal static void ShadowHooks(bool on)
         {
-            static bool Prefix() => !ShadowFreeze;
+            if (on == (_diag != null)) return;
+            if (!on)
+            {
+                _diag.UnpatchSelf();
+                _diag = null;
+                return;
+            }
+            _diag = new Harmony(MyPluginInfo.PLUGIN_GUID + ".diag");
+            var prefix = new HarmonyMethod(typeof(CpuTuning), nameof(ShadowPrefix));
+            _diag.Patch(AccessTools.Method(typeof(LeTai.TrueShadow.TrueShadow), "LateUpdate"), prefix);
+            _diag.Patch(AccessTools.Method(typeof(LeTai.TrueShadow.TrueShadow), "OnWillRenderCanvas"), prefix);
         }
 
-        [HarmonyPatch(typeof(LeTai.TrueShadow.TrueShadow), "OnWillRenderCanvas")]
-        static class ShadowCanvasPatch
-        {
-            static bool Prefix() => !ShadowFreeze;
-        }
+        static bool ShadowPrefix() => !ShadowFreeze;
     }
 }

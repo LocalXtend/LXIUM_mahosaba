@@ -37,7 +37,6 @@ switch (args.Length > 0 ? args[0] : "")
         "Steamworks.CallbackDispatcher::RunFrame", "LeTai.TrueShadow.TrueShadow::LateUpdate",
         "LeTai.TrueShadow.TrueShadow::OnWillRenderCanvas", "UnityEngine.InputSystem.UI.InputSystemUIInputModule::PerformRaycast",
     }); break;
-    // 게임 메서드 읽기: isil <게임 폴더> <형식::메서드>...
     // Canvas null-cache research targets; these are not installed runtime features.
     case "check-canvas-hooks": HookCheck.Run(args[1], new[]
     {
@@ -45,6 +44,7 @@ switch (args.Length > 0 ? args[0] : "")
         "UnityEngine.UI.Graphic::OnTransformParentChanged", "UnityEngine.UI.Graphic::OnEnable",
         "UnityEngine.UI.Graphic::OnDisable", "UnityEngine.UI.Graphic::OnDestroy",
     }); break;
+    // 게임 메서드 읽기: isil <게임 폴더> <형식::메서드>...
     case "isil": HookCheck.Isil(args[1], args[2..]); break;
     case "cpu": await Cpu(args); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
