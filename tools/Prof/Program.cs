@@ -35,7 +35,7 @@ switch (args.Length > 0 ? args[0] : "")
     case "check-cpu-hooks": HookCheck.Run(args[1], new[]
     {
         "Steamworks.CallbackDispatcher::RunFrame", "LeTai.TrueShadow.TrueShadow::LateUpdate",
-        "LeTai.TrueShadow.TrueShadow::OnWillRenderCanvas",
+        "LeTai.TrueShadow.TrueShadow::OnWillRenderCanvas", "UnityEngine.InputSystem.UI.InputSystemUIInputModule::PerformRaycast",
     }); break;
     // 게임 메서드 읽기: isil <게임 폴더> <형식::메서드>...
     case "isil": HookCheck.Isil(args[1], args[2..]); break;

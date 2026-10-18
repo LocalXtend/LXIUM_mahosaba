@@ -81,7 +81,7 @@ namespace LXIUM_mahosaba
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
                 ActorRender.FastDetect = false;
                 RevealWork.Enabled = false;
-                CpuTuning.SteamThrottle = false;
+                CpuTuning.SteamThrottle = CpuTuning.RaycastReuse = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
@@ -110,6 +110,9 @@ namespace LXIUM_mahosaba
             ("18_shadowFreeze", () => CpuTuning.ShadowFreeze = true),
             ("19_noEventSystem", () => { _diagEvents = UnityEngine.EventSystems.EventSystem.current; if (_diagEvents != null) _diagEvents.enabled = false; }),
             ("20_current", null),
+            // UI 마우스 검사 재사용 끔. 기준과의 차이 = 효과
+            ("21_raycastEveryFrame", () => CpuTuning.RaycastReuse = false),
+            ("22_current", null),
 #endif
         };
 #if DEBUG && LXIUM_UI_BENCH
@@ -170,6 +173,7 @@ namespace LXIUM_mahosaba
             StageRender.MainPostOff = Settings.MainPostOff.Value;
             StageRender.MaskSkip = Settings.StageMaskSkip.Value;
             CpuTuning.SteamThrottle = Settings.SteamThrottle.Value;
+            CpuTuning.RaycastReuse = Settings.RaycastReuse.Value;
             CpuTuning.ShadowFreeze = false;
             // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
             StageRender.Dirty = true;

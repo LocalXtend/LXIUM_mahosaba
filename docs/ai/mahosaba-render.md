@@ -156,6 +156,8 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | 모드 코드·스택을 못 푼 부분 | 약 20% |
 
 - G1 **Steam 콜백 빈도 제한** (`Cpu.SteamThrottle`): `Steamworks.CallbackDispatcher.RunFrame` 프리픽스로 초당 60번까지만 (매번 Steam 클라이언트 파이프를 `PeekNamedPipe`로 확인). Steam은 콜백을 쌓아 두었다가 다음 호출에 주므로 최대 16 ms 늦을 뿐. 341.6 → 345.5 fps [관찰: 17차]
+- G2 **UI 마우스 검사 재사용** (`Cpu.RaycastReuse`): `InputSystemUIInputModule.PerformRaycast`(1A573B0, ICF 검사 통과) 프리픽스. 같은 포인터·같은 위치·마우스 버튼과 휠 변화 없음·16 ms 안이면 모듈이 `eventData.pointerCurrentRaycast`에 보관한 지난 결과를 그대로 돌려줌 (모듈은 이 값을 다시 `pointerCurrentRaycast`에 넣으므로 들어가기·나가기 이벤트 없음). 맞힌 오브젝트가 파괴됐으면(래퍼는 있는데 Unity 객체 없음) 새로 검사. 360.7 → 372~374 fps [관찰: 18차]. 대사 클릭 진행·Auto 버튼·불러오기 메뉴 동작 확인 [관찰]
+  - 첫 구현(`EventSystem.RaycastAll`에서 결과 목록을 모드의 IL2CPP List에 복사해 두고 다시 채움)은 시작하자마자 `GameObject.get_transform` 접근 위반으로 꺼졌음 → 결과를 직접 보관하지 않는 방식으로 바꿈
 - 진단 상한 (18차, 실험실 `18_shadowFreeze`·`19_noEventSystem`, 기준 약 340 fps) [관찰]:
   - UI 그림자 TrueShadow 갱신을 모두 건너뜀: −0.23~0.29 ms (372~375 fps). 켜진 그림자 61개(에셋 포함 805개)
   - EventSystem 끔: −0.12~0.29 ms (358~375 fps)
@@ -173,14 +175,13 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | 메인 카메라 Render Scale + FSR | 메인 카메라에 UI·대사가 같이 그려져 글자가 흐려짐 (mahosaba.md 7장). B3이 같은 효과를 월드에만 줌 |
 | 투명 UI 그리기 생략 (`cullTransparentMesh`, CanvasGroup 알파 0 그래픽 `cull`) | 모든 그래픽이 이미 `cullTransparentMesh=true`. 알파 0인 화면 크기 그래픽 46개를 `cull`해도 GPU 차이 0 → Unity가 이미 건너뜀 [관찰: 15·16차] |
 | URP 렌더 그래프 끄기 (호환 모드, `RenderGraphSettings.m_EnableRenderCompatibilityMode`를 Load에서 켬. 속성 setter는 플레이어 빌드에서 예외) | 더 느림: 345 → 280 fps, 메인 카메라 GPU 0.82 → 1.85 ms (호환 경로가 패스를 더 씀) [관찰: 17차] |
-| UI 레이캐스트 결과 재사용 (`EventSystem.RaycastAll`, 마우스가 그대로면 16 ms 동안 지난 결과) | 게임이 시작하자마자 `GameObject.get_transform` 접근 위반으로 꺼짐 (재사용한 결과의 오브젝트). 이득 약 0.15 ms에 비해 입력 위험이 커서 뺌 [관찰: 17차] |
 | 하이브리드 CPU 스레드 배치 (CPU 세트로 메인·렌더 스레드를 P 코어에, 나머지를 E 코어에) | i5-1235U에서 효과 없음: 윈도우에 맡김 303, P 코어 고정 289, 나머지 E 코어 306 fps, E 코어 쪽은 p99가 나빠짐 [관찰: 16차] |
 
 ## 3. 검증 절차 (렌더 실험실)
 
 1. 설정 `Debug.RenderLab = true`
 2. 캐릭터가 나오는 장면(대화) 또는 재판 장면에서 **F10**
-3. 프리셋 21개를 8초씩(안정 2초 + 측정 6초, 약 3분). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
+3. 프리셋 23개를 8초씩(안정 2초 + 측정 6초, 약 3분 15초). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
 
    | 프리셋 | 내용 |
    |---|---|
@@ -197,6 +198,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `14_screenMaskOn` / `15_current` | 법정 화면 마스크 생략 끔 / 기준. 차이 = F2 효과 |
    | `16_steamEveryFrame` / `17_current` | Steam 콜백 매 프레임 / 기준. 차이 = G1 효과 |
    | `18_shadowFreeze` / `19_noEventSystem` / `20_current` | 진단: UI 그림자 갱신 전부 건너뛰기(그림자가 멈춤) / EventSystem 끔(입력 없음). 기준과의 차이 = 그 비용의 상한 |
+   | `21_raycastEveryFrame` / `22_current` | UI 마우스 검사 재사용 끔 / 기준. 차이 = G2 효과 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)
@@ -232,6 +234,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Urp.MainPostOff` | true (0.8.0) | 법정 가장자리는 같음 (법정 카메라 FXAA). UI 글자는 FXAA가 빠져 약간 선명 |
 | `Stage.ScreenMaskSkip` | true (0.8.0) | 없음. 화면 분할 연출이 시작되는 프레임부터 마스크를 다시 씀 |
 | `Cpu.SteamThrottle` | true (0.8.0) | 없음. Steam 알림이 최대 16 ms 늦음 |
+| `Cpu.RaycastReuse` | true (0.8.0) | 없음. 멈춘 마우스 아래로 나타난 UI의 강조 표시가 최대 16 ms 늦음 |
 | `Text.RevealReuse` | false (0.7.0) | 실험. 표시 완료 대사의 알파 갱신 생략, 화질 차이 없이 약 0.03 ms CPU 절감(한 장면). 전체 연출 검증 전 기본 끔 |
 | `Debug.LayerDiag` | false (0.6.0) | — (분석용 로그) |
 | `Debug.GpuTimer` | false (0.6.1) | — (분석용. 카메라별 GPU 시간) |

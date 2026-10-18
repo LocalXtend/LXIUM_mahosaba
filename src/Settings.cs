@@ -23,6 +23,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> StageChangeOnly;
         public static ConfigEntry<bool> StageMaskSkip;
         public static ConfigEntry<bool> SteamThrottle;
+        public static ConfigEntry<bool> RaycastReuse;
         public static ConfigEntry<bool> FastGlyphs;
         public static ConfigEntry<bool> RevealReuse;
         public static ConfigEntry<bool> GpuTimer;
@@ -67,6 +68,8 @@ namespace LXIUM_mahosaba
                 "법정 화면 모양을 자르는 스텐실 마스크가 화면 전체를 덮는 사각형일 때(화면 분할이 아닐 때)는 마스크를 끔. 잘라낼 것이 없어 그림은 같고, 1080p에서 그래픽 칩 약 0.9 ms. 화면 분할 연출이 시작되면 그 프레임부터 다시 켬");
             SteamThrottle = c.Bind("Cpu", "SteamThrottle", true,
                 "Steam 콜백 처리를 초당 60번까지만 함 (게임은 매 프레임 Steam 클라이언트를 확인). 업적 등 알림이 최대 16 ms 늦을 뿐 놓치지 않음");
+            RaycastReuse = c.Bind("Cpu", "RaycastReuse", true,
+                "마우스가 그대로이고 클릭·휠이 없으면 UI 마우스 검사 결과를 16 ms 동안 다시 씀. 클릭·움직임이 있는 프레임은 항상 새로 검사. 멈춘 마우스 아래로 나타난 버튼의 강조 표시가 최대 16 ms 늦음");
             FastGlyphs = c.Bind("Text", "FastGlyphs", true,
                 "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 이 표 읽기가 글자마다 수십 ms라 처음 보는 한글이 많은 화면(불러오기 목록 등)에서 0.4초 멈춤이 생김. 한글 음절에는 합자가 없어 모양은 같음");
             GpuTimer = c.Bind("Debug", "GpuTimer", false,
