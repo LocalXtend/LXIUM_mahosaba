@@ -1,6 +1,7 @@
 // LXIUM 프로파일러: 게임 실행 중 WPR로 잡은 ETW 추적(.etl)에서 manosaba.exe의 CPU 샘플을 함수 이름으로 묶어 본다.
 //   map <게임 폴더> <map.tsv>           GameAssembly.dll(IL2CPP)의 메서드 주소표를 Cpp2IL로 만듦 (PDB가 없으므로)
 //   check-ui-hooks <게임 폴더>         UI 패치 대상의 주소를 전체 메서드와 대조해 ICF 공유가 없음을 검사
+//   check-render-hooks <게임 폴더>     렌더링 쪽 패치 대상을 같은 방법으로 검사
 //   cpu <trace.etl> <map.tsv> [시작초 끝초] [-thread 이름]
 //                                        구간의 CPU 샘플을 스레드·모듈·함수별로 집계. UnityPlayer.dll은 Unity 심볼 서버의 PDB로,
 //                                        GameAssembly.dll은 map.tsv로 이름을 붙임
@@ -21,6 +22,15 @@ switch (args.Length > 0 ? args[0] : "")
 {
     case "map": Map(args[1], args[2]); break;
     case "check-ui-hooks": HookCheck.Run(args[1]); break;
+    // 렌더링 쪽 패치·네이티브 훅 대상 (ActorRender, StageRender, ResourceIndex)
+    case "check-render-hooks": HookCheck.Run(args[1], new[]
+    {
+        "Naninovel.LayeredActorBehaviour::ApplyComposition", "Naninovel.LayeredActorBehaviour::NotifyPerceivedVisibilityChanged",
+        "Naninovel.LayeredActorBehaviour::RebuildLayers", "Naninovel.LayeredDrawer::ClearLayers", "Naninovel.LayeredDrawer::DrawLayers",
+        "Naninovel.LayeredRendererLayer::set_Enabled", "WitchTrials.Views.StageCameraController::SetCameraEnabled",
+        "Naninovel.TransitionalRenderer::RenderToTexture", "Naninovel.TransitionalRenderer::CreateFor",
+        "Naninovel.ResourceProvider::IsLocationCached", "UnityEngine.UI.Graphic::OnEnable",
+    }); break;
     case "cpu": await Cpu(args); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
     case "frames": await Frames(args); break;
@@ -88,7 +98,10 @@ static async Task Cpu(string[] args)
     using var trace = TraceProcessor.Create(etl);
     var pendingCpu = trace.UseCpuSamplingData();
     var pendingSymbols = trace.UseSymbols();
+    var pendingMeta = trace.UseMetadata();
     trace.Process();
+    // 구간은 추적 시작 기준 초. 실험실 로그의 at= 시각에서 이 값을 빼서 구함
+    Console.WriteLine($"trace start {pendingMeta.StartTime.LocalDateTime:HH:mm:ss.fff}");
     // Unity 심볼 서버(UnityPlayer)와 Microsoft 심볼 서버(Windows·드라이버)
     string cache = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(etl)), "symbols");
     await pendingSymbols.Result.LoadSymbolsAsync(new SymCachePath(Path.Combine(cache, "symcache")),
@@ -100,6 +113,7 @@ static async Task Cpu(string[] args)
         var self = new Dictionary<string, double>();
         var total = new Dictionary<string, double>();
         var threads = new Dictionary<string, double>();
+        var cpus = new Dictionary<string, double>();
         double all = 0;
         foreach (var s in pendingCpu.Result.Samples)
         {
@@ -111,6 +125,9 @@ static async Task Cpu(string[] args)
             double ms = (double)s.Weight.TotalMilliseconds;
             all += ms;
             threads[thread] = threads.GetValueOrDefault(thread) + ms;
+            // 하이브리드 CPU(P·E 코어)에서 스레드가 어느 논리 프로세서에서 돌았는지
+            string cpu = $"{thread} cpu{s.Processor}";
+            cpus[cpu] = cpus.GetValueOrDefault(cpu) + ms;
             var frames = s.Stack?.Frames;
             if (frames == null || frames.Count == 0) continue;
             var seen = new HashSet<string>();
@@ -123,6 +140,7 @@ static async Task Cpu(string[] args)
         }
         Console.WriteLine($"######## samples {all:F0} ms ({from}~{(to == double.MaxValue ? "끝" : to)} s)");
         Console.WriteLine("== threads"); Top(threads, all, 12);
+        Console.WriteLine("== thread cpus"); Top(cpus, all, 40);
         Console.WriteLine("== self (함수 자체)"); Top(self, all, 50);
         Console.WriteLine("== total (호출한 것 포함)"); Top(total, all, 80);
     }

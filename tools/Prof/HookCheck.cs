@@ -6,7 +6,7 @@ static class HookCheck
     const ulong ImageBase = 0x180000000;
     const string UnityVersion = "6000.0.48f1";
 
-    internal static void Run(string gameDir)
+    internal static void Run(string gameDir, string[] extraTargets = null)
     {
         string binary = Path.Combine(gameDir, "GameAssembly.dll");
         string metadata = Path.Combine(gameDir, "manosaba_Data", "il2cpp_data", "Metadata", "global-metadata.dat");
@@ -29,7 +29,7 @@ static class HookCheck
                 (Address: m.UnderlyingPointer, Name: t.FullName + "::" + m.Name))).ToArray();
         var byAddress = methods.Where(m => m.Address >= ImageBase).GroupBy(m => m.Address)
             .ToDictionary(g => g.Key, g => g.ToArray());
-        string[] targets =
+        string[] targets = extraTargets is { Length: > 0 } ? extraTargets : new[]
         {
             "Naninovel.UI.RevealFader::Update",
             "Naninovel.UI.RevealFader::HandleTextChanged",
@@ -39,6 +39,7 @@ static class HookCheck
             "Naninovel.UI.RevealState::Reset",
             "Naninovel.UI.RevealState::SetLatAppendIndex"
         };
+        // 렌더링 쪽 패치 대상 (check-render-hooks)
         int failed = 0;
         Console.WriteLine($"scope={methods.Length} method declarations; {byAddress.Count} native addresses");
         foreach (string target in targets)

@@ -64,7 +64,7 @@ namespace LXIUM_mahosaba
         {
             long t = Stopwatch.GetTimestamp();
             FrameRate.Enforce();
-            if (!_urpApplied && (_urpApplied = UrpTuning.Apply())) GpuTimer.Install();
+            if (!_urpApplied && (_urpApplied = UrpTuning.Apply())) GpuTimer.Install(this);
             CourtShaders.Tick();
             RenderLab.Tick(this);
             Hud.Tick();

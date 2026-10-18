@@ -60,7 +60,7 @@ namespace LXIUM_mahosaba
             {
                 UrpTuning.Set(false, SsaoMode.Game, false);
                 ActorRender.ChangeOnly = false;
-                StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = StageRender.ChangeOnly = false;
+                StageRender.HiddenSkip = StageRender.MsaaOff = StageRender.PostOff = StageRender.HalfRate = StageRender.ChangeOnly = StageRender.MainPostOff = StageRender.MaskSkip = false;
                 StageRender.ResolutionOverride = 1f;
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
                 ActorRender.FastDetect = false;
@@ -76,14 +76,61 @@ namespace LXIUM_mahosaba
             ("06_revealOn", () => RevealWork.Enabled = true),
             ("07_revealOff", () => RevealWork.Enabled = false),
             ("08_current", null),
+            // 진단: 메인 카메라(GPU의 대부분, 14차)를 한 부분씩 빼고 GPU 타이머로 그 몫을 잼. 화면이 잠깐 이상해짐
+            // 메인 카메라 후처리 켬 (게임 옵션 값). 01과의 차이 = Urp.MainPostOff 효과
+            ("09_mainPostOn", () => StageRender.MainPostOff = false),
+            ("10_noUi", () => MainDiag("ui")),
+            ("11_noStageScreen", () => MainDiag("screen")),
+            ("12_noWorld", () => MainDiag("world")),
+            ("13_current", null),
+            // 법정 화면 마스크 생략 끔. 13과의 차이 = Stage.ScreenMaskSkip 효과
+            ("14_screenMaskOn", () => StageRender.MaskSkip = false),
+            ("15_current", null),
 #endif
         };
 #if DEBUG && LXIUM_UI_BENCH
         static bool _autoStarted;
 #endif
 
+        // 메인 카메라 진단에서 바꾼 값 (ApplySettings가 되돌림)
+        static Camera _diagCam;
+        static int _diagMask;
+        static bool _diagPost;
+        static Canvas _diagCanvas;
+
+        static void MainDiag(string part)
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            var data = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            _diagCam = cam;
+            _diagMask = cam.cullingMask;
+            _diagPost = data != null && data.renderPostProcessing;
+            switch (part)
+            {
+                case "ui": cam.cullingMask &= ~(1 << LayerMask.NameToLayer("UI")); break;
+                case "world": cam.cullingMask &= ~1; break;
+                case "screen":
+                    _diagCanvas = StageRender.ScreenCanvas;
+                    if (_diagCanvas != null) _diagCanvas.enabled = false;
+                    break;
+            }
+        }
+
+        static void RestoreDiag()
+        {
+            if (_diagCam == null) return;
+            _diagCam.cullingMask = _diagMask;
+            var data = _diagCam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            if (data != null) data.renderPostProcessing = _diagPost;
+            if (_diagCanvas != null) _diagCanvas.enabled = true;
+            _diagCam = null;
+            _diagCanvas = null;
+        }
+
         public static void ApplySettings()
         {
+            RestoreDiag();
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
             ActorRender.FastDetect = Settings.FastDetect.Value;
@@ -93,6 +140,8 @@ namespace LXIUM_mahosaba
             StageRender.PostOff = Settings.StagePostOff.Value;
             StageRender.HalfRate = Settings.StageHalfRate.Value;
             StageRender.ChangeOnly = Settings.StageChangeOnly.Value;
+            StageRender.MainPostOff = Settings.MainPostOff.Value;
+            StageRender.MaskSkip = Settings.StageMaskSkip.Value;
             // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
             StageRender.Dirty = true;
             StageRender.ResolutionOverride = null;
@@ -102,8 +151,78 @@ namespace LXIUM_mahosaba
             CourtShaders.Court.On = Settings.CourtLite.Value;
         }
 
+        // 진단 (Debug.LayerDiag): 켜진 루트 캔버스와 화면의 4분의 1보다 큰 그래픽을 로그에 남김 (메인 카메라 UI 비용 분석)
+        static void DumpCanvases()
+        {
+            float screen = Screen.width * Screen.height;
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<Canvas>()))
+            {
+                var c = o.Cast<Canvas>();
+                if (!c.isActiveAndEnabled || !c.isRootCanvas) continue;
+                int drawn = 0, big = 0;
+                var lines = new List<string>();
+                foreach (var g in c.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+                {
+                    if (!g.isActiveAndEnabled || g.canvasRenderer.cull) continue;
+                    drawn++;
+                    var corners = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
+                    g.rectTransform.GetWorldCorners(corners);
+                    var cam = c.renderMode == RenderMode.ScreenSpaceOverlay ? null : c.worldCamera;
+                    Vector2 a = RectTransformUtility.WorldToScreenPoint(cam, corners[0]), b = RectTransformUtility.WorldToScreenPoint(cam, corners[2]);
+                    // 화면 밖으로 나간 부분은 GPU가 그리지 않으므로 화면 안 넓이만 셈
+                    float w = Mathf.Min(Mathf.Max(a.x, b.x), Screen.width) - Mathf.Max(Mathf.Min(a.x, b.x), 0f);
+                    float h = Mathf.Min(Mathf.Max(a.y, b.y), Screen.height) - Mathf.Max(Mathf.Min(a.y, b.y), 0f);
+                    float area = Mathf.Max(w, 0f) * Mathf.Max(h, 0f);
+                    if (area < screen * 0.25f) continue;
+                    big++;
+                    var cr = g.canvasRenderer;
+                    lines.Add($"    {g.name} {g.GetIl2CppType().Name} tex={g.mainTexture?.width}x{g.mainTexture?.height} inherited={cr.GetInheritedAlpha():F2} color={g.color.a:F2} ctm={cr.cullTransparentMesh} ray={Raycastable(g)} mask={g.GetComponent<UnityEngine.UI.Mask>() != null} area={area / screen:F2}");
+                }
+                int groups = 0, ignoring = 0;
+                foreach (var cg in c.GetComponentsInChildren<CanvasGroup>(false))
+                {
+                    groups++;
+                    if (cg.ignoreParentGroups) ignoring++;
+                }
+                var ray = c.GetComponent<UnityEngine.UI.GraphicRaycaster>();
+                Plugin.L.LogInfo($"canvas {c.name} mode={c.renderMode} order={c.sortingOrder} cam={c.worldCamera?.name} raycaster={ray != null && ray.enabled} groups={groups} ignoreParent={ignoring} drawn={drawn} big={big}");
+                foreach (var l in lines) Plugin.L.LogInfo(l);
+            }
+            // 법정 화면 캔버스(메인 카메라 GPU의 약 70%, 15차)의 그리기 상세
+            var sc = StageRender.ScreenCanvas;
+            if (sc != null)
+                foreach (var g in sc.GetComponentsInChildren<UnityEngine.UI.Graphic>(false))
+                {
+                    var m = g.GetComponent<UnityEngine.UI.Mask>();
+                    var rt = g.mainTexture?.TryCast<RenderTexture>();
+                    Plugin.L.LogInfo($"screen {g.name} {g.GetIl2CppType().Name} cull={g.canvasRenderer.cull} shader={g.materialForRendering?.shader?.name} " +
+                                     $"mask={(m == null ? "-" : $"{m.enabled}/show={m.showMaskGraphic}")} " +
+                                     (rt == null ? "" : $"rt={rt.width}x{rt.height} {rt.graphicsFormat} aa={rt.antiAliasing} mip={rt.useMipMap} depth={rt.depthStencilFormat}"));
+                }
+            var main = Camera.main;
+            var asset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.TryCast<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>();
+            if (main != null)
+                Plugin.L.LogInfo($"main camera hdr={main.allowHDR} assetHdr={asset?.supportsHDR} precision={asset?.hdrColorBufferPrecision} target={main.targetTexture?.name} " +
+                                 $"clear={main.clearFlags} msaa={main.allowMSAA} renderScale={asset?.renderScale}");
+        }
+
+        // GraphicRaycaster가 이 그래픽을 맞힐 수 있는지 (raycastTarget, 위쪽 CanvasGroup의 blocksRaycasts)
+        static bool Raycastable(UnityEngine.UI.Graphic g)
+        {
+            if (!g.raycastTarget) return false;
+            for (var t = g.transform; t != null; t = t.parent)
+            {
+                var cg = t.GetComponent<CanvasGroup>();
+                if (cg == null || !cg.enabled) continue;
+                if (!cg.blocksRaycasts) return false;
+                if (cg.ignoreParentGroups) break;
+            }
+            return true;
+        }
+
         static IEnumerator Run()
         {
+            if (Settings.LayerDiag.Value) DumpCanvases();
             var dir = Path.Combine(Dir, DateTime.Now.ToString("MMdd_HHmmss"));
             Directory.CreateDirectory(dir);
             var log = new List<string>
@@ -124,8 +243,12 @@ namespace LXIUM_mahosaba
 
                 times.Clear();
                 long mod = ModTicks;
+                double gpu0 = GpuTimer.TotalMs, main0 = GpuTimer.Cameras.GetValueOrDefault("MainCamera").Ms;
+                int gpuFrames0 = GpuTimer.Frames;
                 int cams = _cameraRenders, ld = ActorRender.LayerDraws, ls = ActorRender.LayerSkips,
                     cd = ActorRender.CopyDraws, cs = ActorRender.CopySkips, ss = StageRender.Skipped;
+                // ETW 추적 등 바깥 기록과 맞추는 측정 시작 시각
+                var at = DateTime.Now;
                 for (float t = 0; t < Sample; t += Time.unscaledDeltaTime)
                 {
                     times.Add(Time.unscaledDeltaTime);
@@ -133,10 +256,13 @@ namespace LXIUM_mahosaba
                 }
                 int frames = times.Count;
                 string extra = $" modCpu={(ModTicks - mod) * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames:F3}ms";
+                int gpuFrames = GpuTimer.Frames - gpuFrames0;
+                if (GpuTimer.Active && gpuFrames > 0)
+                    extra += $" gpu={(GpuTimer.TotalMs - gpu0) / gpuFrames:F3}ms mainCam={(GpuTimer.Cameras.GetValueOrDefault("MainCamera").Ms - main0) / gpuFrames:F3}ms";
                 log.Add($"{name} {Stats(times)} perFrame cameras={(float)(_cameraRenders - cams) / frames:F2} " +
                         $"layerDraw={(float)(ActorRender.LayerDraws - ld) / frames:F2} layerSkip={(float)(ActorRender.LayerSkips - ls) / frames:F2} " +
                         $"copyDraw={(float)(ActorRender.CopyDraws - cd) / frames:F2} copySkip={(float)(ActorRender.CopySkips - cs) / frames:F2} " +
-                        $"stageSkip={(float)(StageRender.Skipped - ss) / frames:F2}{extra}");
+                        $"stageSkip={(float)(StageRender.Skipped - ss) / frames:F2}{extra} at={at:HH:mm:ss.fff}");
                 Plugin.L.LogInfo("lab " + log[^1]);
 
                 // 안내 문구·패널 없는 프레임을 찍음

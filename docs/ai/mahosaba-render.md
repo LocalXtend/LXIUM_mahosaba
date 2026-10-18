@@ -131,6 +131,18 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 - E1 **외형 이벤트 감지** (`Character.FastDetect`의 뜻을 바꿈): 레이어 해시를 4프레임마다 돌려 가며 계산하던 것을, Naninovel이 외형을 바꿀 때만 계산. 이벤트 = `LayeredActorBehaviour.ApplyComposition`·`RebuildLayers`·`NotifyPerceivedVisibilityChanged` 뒤, `LayeredRendererLayer.Enabled` 설정 뒤에 올리는 번호 + 캐릭터 루트의 `activeInHierarchy`(루트가 켜질 때는 이벤트가 없어 1번 놓쳤음 → 추가) + 합성 RT·PPU. 번호가 그대로면 해시 없이 지난 그림. 놓친 변화 대비로 캐릭터마다 2초에 한 번 해시 확인(프레임당 최대 하나), 같은 그림 다시 합성(안전 갱신)은 10초로 늘림 (끄면 1초)
 - 검증: 진단 로그의 `missedByEvents`(확인 검사에서야 발견된 변화) 불러오기·재판·심문 내내 0 [관찰]
 
+### F. 메인 카메라 GPU 줄이기 (0.8.0)
+
+15차 GPU 타이머로 메인 카메라(1080p 재판 대화, 3.2 ms)를 실험실 진단 프리셋으로 나눔 [관찰]: 후처리(FXAA + LUT) 1.3~1.7 ms, UI 1.9~2.2 ms, 그중 법정 화면 캔버스(`ScreenCanvas`) 1.45~1.6 ms, 월드(배경) 0.15 ms.
+
+- F1 **메인 후처리 끄기** (`Urp.MainPostOff`): 볼륨 효과가 모두 0이라 메인 카메라 후처리가 하는 일은 화면 전체 FXAA뿐 (mahosaba.md 4장). 끄면 B의 규칙대로 법정 카메라가 자기 FXAA를 켜서 법정 가장자리는 그대로, UI 글자는 FXAA가 빠져 약간 선명. 200 → 262 fps [관찰: 15차]
+- F2 **법정 화면 마스크 생략** (`Stage.ScreenMaskSkip`): `ScreenCanvas`의 화면마다(`StageScreenContainer`) `Quadrilateral`(GigaCreation.Essentials.Ui, `MaskableGraphic`, 꼭짓점 `_x`·`_y`·`_z`·`_w` = 사각형 로컬 좌표) + `Mask`(`showMaskGraphic=false`) + RawImage(무대 RT, B5G6R5) [관찰: 캔버스 목록·interop]. 화면 분할이 아닐 때 꼭짓점은 사각형의 네 모서리(±960, ±540)라 마스크가 잘라내는 것이 없는데, 스텐실 쓰기·되돌리기 2번이 Iris Xe 1080p에서 약 1 ms [관찰: 마스크를 끈 진단 −0.96 ms, 화면 평균 차이 0.08/255]
+  - 꼭짓점이 모두 사각형 안이고 이루는 넓이가 사각형 넓이와 같으며(= 네 모서리), 사각형이 화면에 축 정렬로 화면 전체를 덮으면 `Mask`를 끄고 사각형 그래픽도 `cull` (마스크를 끄면 사각형이 흰 그래픽으로 그려져, 법정 화면이 서서히 나타날 때 흰빛이 섞임)
+  - 판단 시점: `Canvas.preWillRenderCanvases` (게임 스크립트가 꼭짓점을 바꾼 뒤, UI 그래픽을 다시 만들기 전) → 분할 연출이 시작되는 프레임부터 마스크가 다시 켜짐. 다시 켤 때 `OnCullingChanged`로 cull 동안 건너뛴 사각형 메시 갱신을 등록
+  - 판단 입력(꼭짓점·`rect` 필드·`localToWorldMatrix`·화면 크기)이 그대로면 지난 판단을 씀. 매 프레임 계산하면 interop 래퍼 생성으로 모드 CPU +0.14 ms였음. 게임 시작 직후 캔버스의 UI 카메라가 비어 있는 동안은 판단을 저장하지 않음 (첫 판에서 틀린 판단이 굳어 마스크가 한 번도 꺼지지 않았음)
+  - 결과 (16차, 다른 프로그램의 GPU 사용 없이): 메인 카메라 GPU 2.10 → 0.88 ms, 288 → 317 fps, 스크린샷 평균 차이 0.018/255 [관찰]
+- F3 **버그 수정**: B의 숨은 화면 RawImage `cull`을 풀 때 `Graphic.OnCullingChanged()`를 부름 (`MaskableGraphic.UpdateCull`과 같음). 없으면 cull 동안 건너뛴 다시 만들기가 등록되지 않아, 그 사이 메시가 지워진 경우(이미지 끔·켬 등) 법정이 검게 남음 [관찰: 실험실 진단에서 재현]
+
 ### 채택하지 않는 것
 
 | 힌트 | 이유 |
@@ -138,12 +150,14 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | Async (병렬 처리) | 노벨 진행·Unity API는 메인 스레드 전용. 렌더는 이미 gfx-jobs(`gfx-threading-mode=6`) [관찰] |
 | Opaque Ice (투명 → 불투명) | B1·B2 뒤에는 투명 쿼드 몇 장만 남아 이득이 작음 [추론] |
 | 메인 카메라 Render Scale + FSR | 메인 카메라에 UI·대사가 같이 그려져 글자가 흐려짐 (mahosaba.md 7장). B3이 같은 효과를 월드에만 줌 |
+| 투명 UI 그리기 생략 (`cullTransparentMesh`, CanvasGroup 알파 0 그래픽 `cull`) | 모든 그래픽이 이미 `cullTransparentMesh=true`. 알파 0인 화면 크기 그래픽 46개를 `cull`해도 GPU 차이 0 → Unity가 이미 건너뜀 [관찰: 15·16차] |
+| 하이브리드 CPU 스레드 배치 (CPU 세트로 메인·렌더 스레드를 P 코어에, 나머지를 E 코어에) | i5-1235U에서 효과 없음: 윈도우에 맡김 303, P 코어 고정 289, 나머지 E 코어 306 fps, E 코어 쪽은 p99가 나빠짐 [관찰: 16차] |
 
 ## 3. 검증 절차 (렌더 실험실)
 
 1. 설정 `Debug.RenderLab = true`
 2. 캐릭터가 나오는 장면(대화) 또는 재판 장면에서 **F10**
-3. 프리셋 9개를 8초씩(안정 2초 + 측정 6초, 약 75초). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.7.0. 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 메인 후처리, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
+3. 프리셋 16개를 8초씩(안정 2초 + 측정 6초, 약 2분 20초). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
 
    | 프리셋 | 내용 |
    |---|---|
@@ -154,6 +168,10 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `05_current` | 기준을 다시 잼. `01`과 차이 = 발열·잡음 → 두 기준을 시간에 따라 보간해 Δ를 냄 |
    | `06_revealOn` / `07_revealOff` | 대사 갱신 재사용 켬 / 끔. 같은 대사를 완전히 표시한 상태로 유지 (`mahosaba-ui.md`) |
    | `08_current` | UI 비교 뒤 원래 설정을 다시 잼 |
+   | `09_mainPostOn` | 메인 카메라 후처리 켬 (게임 옵션 값). 기준과 차이 = F1 효과 |
+   | `10_noUi` / `11_noStageScreen` / `12_noWorld` | 진단: 메인 카메라에서 UI 레이어 / 법정 화면 캔버스 / 월드 레이어를 뺌. 화면이 잠깐 이상해짐. GPU 타이머로 그 몫을 잼 |
+   | `13_current` | 진단 뒤 기준을 다시 잼 |
+   | `14_screenMaskOn` / `15_current` | 법정 화면 마스크 생략 끔 / 기준. 차이 = F2 효과 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)
@@ -161,6 +179,9 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 7. `FrameTimingManager`는 이 빌드에서 켜져 있다고 나오지만 D3D11에서 값이 오지 않아(4·5차) 0.2.2에서 기록을 뺌
 8. 측정 중 화면 패널(PgUp·PgDn)은 켜 둘 수 있음: 플래그 패널에 실험실이 바꾸는 값이 그대로 보이고, 스크린샷을 찍는 프레임에는 숨김
 9. `Character.Resolution`은 액터 생성 때 적용되므로 실험실 안에서 바뀌지 않음. 값을 바꾸고 다시 실행해 비교
+10. `Debug.GpuTimer`가 켜져 있으면 `gpu`(프레임당 GPU 합)·`mainCam`(메인 카메라)도 적음. 각 줄의 `at=`는 측정 시작 시각 (ETW 추적·성능 카운터와 맞출 때)
+11. `Debug.LayerDiag`가 켜져 있으면 시작할 때 켜진 루트 캔버스와 화면의 4분의 1보다 큰 그래픽(화면 안 넓이, 상속 알파, 색 알파, `cullTransparentMesh`, 클릭 판정 여부, 마스크), 법정 화면 캔버스 상세(셰이더·마스크·RT 형식), 메인 카메라 HDR·MSAA를 로그에 남김
+12. **측정 환경**: 다른 프로그램이 GPU를 쓰면 결과가 크게 흔들림. 16차에 이 PC의 Claude 앱이 도구 실행 중 GPU 3D 엔진의 약 50%를 써서, 마스크 생략이 GPU를 1 ms 줄이고도 fps가 떨어지는 결과가 나왔음. 앱이 쉬는 동안 실험실을 돌리자 반대로 +10~20%. `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage"`로 프로세스별 사용률을 함께 기록할 것. 또 이 노트북(i5-1235U, 15 W급)은 CPU·GPU가 전력 한도를 나눠 써서 GPU 일을 줄이면 CPU 클럭이 오름 (UI를 뺀 진단에서 P 코어 2.1 → 2.56 GHz) → 어느 쪽을 줄여도 프레임이 빨라질 수 있음
 
 ## 4. 설정 (`BepInEx/config/LXIUM_mahosaba.cfg`)
 
@@ -182,6 +203,8 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Character.FastDetect` | true (0.4.0, 0.6.1부터 외형 이벤트 감지 E1) | 이벤트로 못 잡은 변화는 최대 2초 늦음 (검증 중 0번) |
 | `Stage.CourtChangeOnly` | true (0.5.1) | 감지한 변화는 같은 프레임에 반영. 감지하지 못한 변화(법정 밖 연출 등)는 최대 1초 늦음. 불이 켜져 있으면 매 프레임 그림 |
 | `Text.FastGlyphs` | true (0.6.0) | 동적으로 더해지는 글자에 합자·커닝이 적용되지 않음. 한글 음절은 합자가 없음 |
+| `Urp.MainPostOff` | true (0.8.0) | 법정 가장자리는 같음 (법정 카메라 FXAA). UI 글자는 FXAA가 빠져 약간 선명 |
+| `Stage.ScreenMaskSkip` | true (0.8.0) | 없음. 화면 분할 연출이 시작되는 프레임부터 마스크를 다시 씀 |
 | `Text.RevealReuse` | false (0.7.0) | 실험. 표시 완료 대사의 알파 갱신 생략, 화질 차이 없이 약 0.03 ms CPU 절감(한 장면). 전체 연출 검증 전 기본 끔 |
 | `Debug.LayerDiag` | false (0.6.0) | — (분석용 로그) |
 | `Debug.GpuTimer` | false (0.6.1) | — (분석용. 카메라별 GPU 시간) |
@@ -208,8 +231,10 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 2. 기호: UnityPlayer.dll은 Unity 심볼 서버(`https://symbolserver.unity3d.com`)에 릴리스 플레이어 PDB가 있음 (`UnityPlayer_Win64_player_il2cpp_x64.pdb`, 22.8 MB). GameAssembly.dll은 PDB가 없어 Cpp2IL로 메서드 주소표(9.5만 개)를 만듦 (`Prof map`)
 3. 분석 (`tools/Prof`, TraceProcessor): `frames` = Present 간격으로 프레임 시간 통계·긴 프레임 목록, `tree` = 구간의 메인 스레드 호출 트리, `cpu` = 구간의 함수별 합계, `timeline` = 스레드별 CPU 사용
 4. 진단 설정 `Debug.LayerDiag`: 5초마다 캐릭터 합성 횟수·원인(바뀐 레이어·항목)·원래 합성 시간·이벤트로 못 잡은 변화 수, D2 색인 조회 수·시간, 모드 부분별 프레임당 시간(`ModProf`)을 로그에 남김
-5. **GPU 타이머** `Debug.GpuTimer` (0.6.1): D3D11 타임스탬프 쿼리를 카메라 렌더 앞뒤에 넣어 카메라별 GPU 시간을 5초마다 로그·화면 패널에. 쿼리는 Unity 렌더 스레드에서 써야 해서 `CommandBuffer.IssuePluginEvent` + `Graphics.ExecuteCommandBuffer`로 렌더 순서에 끼움 (URP 콜백이 넘겨준 `ScriptableRenderContext`로 `ExecuteCommandBuffer`를 부르면 interop 접근 위반으로 게임이 시작하자마자 꺼졌음). 결과는 4프레임 뒤에 읽어 GPU를 기다리지 않음
+5. **GPU 타이머** `Debug.GpuTimer` (0.6.1): D3D11 타임스탬프 쿼리를 카메라 렌더 앞뒤에 넣어 카메라별 GPU 시간을 5초마다 로그·화면 패널에. 쿼리는 Unity 렌더 스레드에서 써야 해서 `CommandBuffer.IssuePluginEvent` + `Graphics.ExecuteCommandBuffer`로 렌더 순서에 끼움 (URP 콜백이 넘겨준 `ScriptableRenderContext`로 `ExecuteCommandBuffer`를 부르면 interop 접근 위반으로 게임이 시작하자마자 꺼졌음). 결과는 4프레임 뒤에 읽어 GPU를 기다리지 않음. 0.8.0부터 프레임 시작·끝(`WaitForEndOfFrame`)에도 표시를 넣어 프레임 전체 GPU 시간과 카메라 밖 시간(`outsideCameras`)을 함께 적고, 실험실이 프리셋별 합을 읽음
 6. **RenderDoc 메모**: Steam 게임이라 exe를 직접 켜면 Steam이 다시 실행해 주입이 풀림 → 잴 때만 게임 폴더에 `steam_appid.txt`(3101040)를 두고 끝나면 지움. 이렇게 켜도 **BepInEx가 로드되지 않음**(로그가 갱신되지 않음, RenderDoc과 doorstop이 둘 다 시작 단계를 가로채는 것으로 보임) → 캡처는 모드 없는 원래 게임의 프레임. F12는 Steam 스크린샷 키와 겹치고, PrintScreen은 Windows 캡처 도구를 엶. 분석 스크립트 `tools/Prof/rdc_frame.py`(qrenderdoc `--python`, 첫 실행 안내창을 끄는 설정 필요)
+7. **CPU 코어별 표본** (`Prof cpu`, 0.8.0): 구간마다 스레드별로 어느 논리 프로세서에서 돌았는지(`== thread cpus`)와 추적 시작 시각을 출력. 하이브리드 CPU에서 메인 스레드가 E 코어에 머문 비율을 봄 (16차: 13~25%). 코어별 실제 클럭은 `typeperf "\Processor Information(0,N)\Actual Frequency"`
+8. interop 형식 확인: `ilspycmd -t <형식> BepInEx/interop/<어셈블리>.dll` (`dotnet tool install -g ilspycmd`). 필드·속성 형식만 보임, 메서드 본문은 GameAssembly에 있음
 
 
 ## 8. 미확인
