@@ -45,7 +45,7 @@ namespace LXIUM_mahosaba
         static Dictionary<string, Shader> _lite;
 
         // 알려진 법정. 새 재판의 법정 프리팹은 Court.Awake 뒤에 더하고, 게임 시작 직후 한 번만 전체 검색으로 채움.
-        // 전체 검색(Resources.FindObjectsOfTypeAll)은 3~4 ms라 1초마다 하면 그때마다 프레임이 튐 (20차)
+        // 전체 검색(Resources.FindObjectsOfTypeAll)은 3~4 ms라 1초마다 하면 그때마다 프레임이 튐 (21차)
         static readonly List<Court> Courts = new();
         static bool _courtsDirty = true, _searched;
         static IntPtr _active;
