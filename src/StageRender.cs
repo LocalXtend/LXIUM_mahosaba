@@ -41,6 +41,9 @@ namespace LXIUM_mahosaba
         static StageScreenController _screens;
         static Camera[] _cameras;
         static RawImage[] _images;
+        // 매 프레임 쓰는 래퍼를 미리 얻어 둠 (Boot 씬에 늘 있는 객체)
+        static CanvasRenderer[] _crs;
+        static Transform[] _camTr;
         // 화면마다 모양을 자르는 사각형(게임의 Quadrilateral)과 그 스텐실 Mask. 모드가 끈 마스크 표시
         static Quadrilateral[] _quads;
         static Mask[] _masks;
@@ -86,6 +89,8 @@ namespace LXIUM_mahosaba
             int n = Mathf.Min(cams.Length, scrs.Length);
             _cameras = new Camera[n];
             _images = new RawImage[n];
+            _crs = new CanvasRenderer[n];
+            _camTr = new Transform[n];
             _quads = new Quadrilateral[n];
             _masks = new Mask[n];
             _quadRts = new RectTransform[n];
@@ -106,6 +111,8 @@ namespace LXIUM_mahosaba
             {
                 _cameras[i] = cams[i]._camera;
                 _images[i] = scrs[i].GetComponentInChildren<RawImage>(true);
+                _crs[i] = _images[i]?.canvasRenderer;
+                _camTr[i] = _cameras[i]?.transform;
                 _quads[i] = scrs[i]._quadrilateral;
                 _masks[i] = _quads[i]?.GetComponent<Mask>();
                 _quadRts[i] = _quads[i]?.rectTransform;
@@ -127,8 +134,10 @@ namespace LXIUM_mahosaba
         public static void LateTick()
         {
             if (!Find()) return;
-            // RT를 다시 만들거나 후처리·깊이를 바꾸면 그림이 달라짐
-            if (Resize() | ApplyCameraData()) Dirty = true;
+            int frame = Time.frameCount;
+            // RT를 다시 만들거나 후처리·깊이를 바꾸면 그림이 달라짐. 게임이 그 값을 바꿨는지는 16프레임마다 확인
+            // (매 프레임이면 interop 호출 약 20번). 장면이 바뀐 프레임에는 바로 확인
+            if (((frame & 15) == 0 || Dirty) && (Resize() | ApplyCameraData())) Dirty = true;
             if (_presented is not bool presented) return;
             if (ChangeOnly)
             {
@@ -140,13 +149,14 @@ namespace LXIUM_mahosaba
             for (int i = 0; i < _cameras.Length; i++)
             {
                 var cam = _cameras[i];
-                if (cam == null) continue;
-                bool visible = Visible(_images[i]);
+                // Unity의 == 는 interop에서 il2cpp 호출이라 참조만 비교 (무대 객체는 Boot 씬에 늘 있음)
+                if (ReferenceEquals(cam, null)) continue;
+                bool visible = Visible(i);
                 bool want = presented && !Freeze && (!HiddenSkip || visible);
                 // CanvasGroup 알파가 0이어도 UI는 화면 전체 크기 투명 사각형을 그대로 그림 → 그리기 목록에서 뺌
-                var cr = _images[i]?.canvasRenderer;
+                var cr = _crs[i];
                 bool cull = HiddenSkip && CullHidden && !visible;
-                if (cr != null && cr.cull != cull)
+                if (!ReferenceEquals(cr, null) && cr.cull != cull)
                 {
                     cr.cull = cull;
                     // 가려진 동안 건너뛴 다시 만들기를 등록 (MaskableGraphic.UpdateCull과 같음). 없으면 그 사이 지워진 메시로 법정이 검게 남음
@@ -158,14 +168,14 @@ namespace LXIUM_mahosaba
                 // 반 프레임: 카메라가 멈춰 있으면 두 프레임에 한 번만 그리고 그 사이에는 RT의 지난 그림을 그대로 보여 줌.
                 // 카메라가 움직이는 동안은 매 프레임 그려서 팬·줌이 끊겨 보이지 않게 함. 두 카메라는 번갈아 그림.
                 // 바로 앞 프레임에 그린 카메라만 건너뜀: 숨어 있다 나타난 카메라의 RT는 오래된 장면이라 바로 그림
-                if (want && HalfRate && !moved && _drawnFrame[i] == Time.frameCount - 1 && ((Time.frameCount + i) & 1) == 1) want = false;
+                if (want && HalfRate && !moved && _drawnFrame[i] == frame - 1 && ((frame + i) & 1) == 1) want = false;
                 // 바뀔 때만 그리기: 마지막으로 그린 뒤 장면이 그대로면 RT의 지난 그림을 그대로 보여 줌. 1초마다 한 번은 그림
                 if (want && ChangeOnly && _drawnVersion[i] == _version && now - _lastDraw[i] < RefreshInterval) want = false;
                 if (cam.enabled != want) cam.enabled = want;
                 if (presented && !want) Skipped++;
                 if (!want) continue;
                 _drawnVersion[i] = _version;
-                _drawnFrame[i] = Time.frameCount;
+                _drawnFrame[i] = frame;
                 _lastDraw[i] = now;
             }
         }
@@ -186,8 +196,8 @@ namespace LXIUM_mahosaba
 
         // ActorRender가 RenderToTexture마다 부름 (Update에서 화면에 그려지는 액터마다 한 번, 그 직후 DrawMesh).
         // 순서와 무관하게 더해 두고 LateTick이 지난 프레임 합과 비교함. 액터가 사라지면 합에서 빠져 바뀐 것으로 잡힘
-        internal static void NoteActor(TransitionalRenderer r) =>
-            _actorSum += HashCode.Combine(r.Pointer, r.Opacity, MatrixHash(r.transform.localToWorldMatrix));
+        internal static void NoteActor(TransitionalRenderer r, Transform t) =>
+            _actorSum += HashCode.Combine(r.Pointer, r.Opacity, MatrixHash(t.localToWorldMatrix));
 
         static int MatrixHash(Matrix4x4 m) => HashCode.Combine(
             HashCode.Combine(m.m00, m.m01, m.m02, m.m03),
@@ -271,8 +281,12 @@ namespace LXIUM_mahosaba
                     h = h * 31 + MatrixHash(light.transform.localToWorldMatrix);
                 }
             }
-            // 파괴된 렌더러가 목록에 남은 경우: 다음 수집(1초 안)까지 매 프레임 그림
-            catch (Exception) { moving = true; }
+            // 파괴된 렌더러가 목록에 남은 경우: 다시 모으기(1초 안)까지 매 프레임 그림
+            catch (Exception)
+            {
+                moving = true;
+                CourtShaders.RequestCollect();
+            }
             return h;
         }
 
@@ -283,7 +297,7 @@ namespace LXIUM_mahosaba
             for (int i = 0; i < _masks.Length; i++)
             {
                 var m = _masks[i];
-                if (m == null) continue;
+                if (ReferenceEquals(m, null)) continue;
                 bool off = MaskSkip && Covers(i);
                 if (off == _maskOff[i]) continue;
                 // 게임이 이미 끈 마스크는 건드리지 않음
@@ -349,16 +363,19 @@ namespace LXIUM_mahosaba
                    Mathf.Max(p0.x, p2.x) >= Screen.width - 0.5f && Mathf.Max(p0.y, p2.y) >= Screen.height - 0.5f;
         }
 
-        static bool Visible(RawImage img) =>
-            img != null && img.isActiveAndEnabled && img.canvasRenderer.GetInheritedAlpha() > 0.001f;
+        static bool Visible(int i) =>
+            !ReferenceEquals(_images[i], null) && _images[i].isActiveAndEnabled && _crs[i].GetInheritedAlpha() > 0.001f;
 
         static bool Moved(int i, Camera cam)
         {
-            var tr = cam.transform;
+            var tr = _camTr[i];
             Vector3 p = tr.position;
             Quaternion q = tr.rotation;
             float fov = cam.fieldOfView;
-            bool moved = p != _lastPos[i] || q != _lastRot[i] || fov != _lastFov[i];
+            // interop 구조체의 연산자는 il2cpp 호출이라 필드로 비교
+            Vector3 lp = _lastPos[i];
+            Quaternion lq = _lastRot[i];
+            bool moved = p.x != lp.x || p.y != lp.y || p.z != lp.z || q.x != lq.x || q.y != lq.y || q.z != lq.z || q.w != lq.w || fov != _lastFov[i];
             _lastPos[i] = p;
             _lastRot[i] = q;
             _lastFov[i] = fov;

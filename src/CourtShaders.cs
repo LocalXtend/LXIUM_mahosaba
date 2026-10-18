@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using HarmonyLib;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 using WitchTrials.Views;
@@ -43,6 +44,25 @@ namespace LXIUM_mahosaba
         static float _nextFind;
         static Dictionary<string, Shader> _lite;
 
+        // 알려진 법정. 새 재판의 법정 프리팹은 Court.Awake 뒤에 더하고, 게임 시작 직후 한 번만 전체 검색으로 채움.
+        // 전체 검색(Resources.FindObjectsOfTypeAll)은 3~4 ms라 1초마다 하면 그때마다 프레임이 튐 (20차)
+        static readonly List<Court> Courts = new();
+        static bool _courtsDirty = true, _searched;
+        static IntPtr _active;
+
+        [HarmonyPatch(typeof(Court), "Awake")]
+        static class CourtAwakePatch
+        {
+            static void Postfix(Court __instance)
+            {
+                Courts.Add(__instance);
+                _courtsDirty = true;
+            }
+        }
+
+        // 법정 렌더러가 파괴돼 목록이 맞지 않을 때 StageRender가 부름 → 다음 확인 때 다시 모음
+        internal static void RequestCollect() => _courtsDirty = true;
+
         public static void Tick()
         {
             bool changed = false, any = false;
@@ -53,10 +73,29 @@ namespace LXIUM_mahosaba
             }
             // 법정 바뀔 때만 그리기도 이 수집으로 법정 렌더러 목록을 받음
             if (!any && !StageRender.ChangeOnly) return;
-            // 법정 프리팹은 재판마다 다시 로드될 수 있어 1초마다 재질을 다시 모음
+            // 법정 프리팹은 재판마다 다시 로드될 수 있어 1초마다 알려진 법정의 켜짐을 확인
             if (!changed && Time.unscaledTime < _nextFind) return;
             _nextFind = Time.unscaledTime + 1f;
-            Collect();
+            if (!_searched)
+            {
+                _searched = true;
+                foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Court>()))
+                    if (!Courts.Exists(c => c.Pointer == o.Pointer)) Courts.Add(o.Cast<Court>());
+            }
+            int known = Courts.Count;
+            Courts.RemoveAll(c => c == null);
+            Court active = null;
+            foreach (var c in Courts)
+                if (c.gameObject.activeInHierarchy) { active = c; break; }
+            IntPtr activePtr = active?.Pointer ?? IntPtr.Zero;
+            // 설정이 바뀌었거나 법정이 생기고 없어졌거나 켜진 법정이 바뀌었을 때만 다시 모음
+            if (!changed && !_courtsDirty && Courts.Count == known && activePtr == _active) return;
+            _courtsDirty = false;
+            _active = activePtr;
+            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            Collect(active);
+            if (Settings.LayerDiag.Value)
+                Plugin.L.LogInfo($"court collect {Courts.Count} courts {(System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F2}ms");
             foreach (var s in All)
             {
                 s.Applied = s.On;
@@ -102,16 +141,13 @@ namespace LXIUM_mahosaba
             return _lite.TryGetValue(name, out var found) ? found : null;
         }
 
-        static void Collect()
+        static void Collect(Court active)
         {
             foreach (var s in All) s.Materials.Clear();
-            Court active = null;
-            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppType.Of<Court>()))
+            foreach (var court in Courts)
             {
-                var court = o.Cast<Court>();
                 Add(court.GetComponentsInChildren<Renderer>(true));
                 if (court._fireVfx != null) Add(court._fireVfx.GetComponentsInChildren<Renderer>(true));
-                if (active == null && court.gameObject.activeInHierarchy) active = court;
             }
             StageRender.SetCourt(active);
         }

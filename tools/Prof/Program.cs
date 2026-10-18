@@ -29,7 +29,7 @@ switch (args.Length > 0 ? args[0] : "")
         "Naninovel.LayeredActorBehaviour::RebuildLayers", "Naninovel.LayeredDrawer::ClearLayers", "Naninovel.LayeredDrawer::DrawLayers",
         "Naninovel.LayeredRendererLayer::set_Enabled", "WitchTrials.Views.StageCameraController::SetCameraEnabled",
         "Naninovel.TransitionalRenderer::RenderToTexture", "Naninovel.TransitionalRenderer::CreateFor",
-        "Naninovel.ResourceProvider::IsLocationCached",
+        "Naninovel.ResourceProvider::IsLocationCached", "WitchTrials.Views.Court::Awake",
     }); break;
     // CPU 쪽 패치 대상 (CpuTuning)
     case "check-cpu-hooks": HookCheck.Run(args[1], new[]

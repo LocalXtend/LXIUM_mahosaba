@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using HarmonyLib;
+using Il2CppInterop.Runtime;
 using Naninovel;
 using UnityEngine;
 
@@ -60,9 +61,14 @@ namespace LXIUM_mahosaba
 
         sealed class CopyState
         {
-            public long Hash, Inputs;
+            public long Hash = long.MinValue, Inputs;
             public float LastDraw;
+            // 액터 Transform 래퍼 (매 프레임 transform을 다시 얻지 않음)
+            public Transform Transform;
         }
+
+        // 프레임 시작 시각 (Host.Update가 넣음). 패치마다 Time.unscaledTime을 부르지 않으려고
+        internal static float Now;
 
         static readonly Dictionary<IntPtr, DrawerState> Drawers = new();
         static readonly Dictionary<IntPtr, CopyState> Copies = new();
@@ -164,7 +170,7 @@ namespace LXIUM_mahosaba
                     __state = new DrawerState { Renderers = comps, Objects = objects, Name = drawer.transform.root.name, Root = drawer.transform.gameObject };
                     Drawers[key] = __state;
                 }
-                float now = Time.unscaledTime;
+                float now = Now;
                 bool due = now - __state.LastDraw >= RefreshInterval;
                 bool rtSame = renderTexture != null && renderTexture.Pointer == __state.Texture;
                 bool refreshNow = false, polled = false;
@@ -269,20 +275,25 @@ namespace LXIUM_mahosaba
             static bool Prefix(TransitionalRenderer __instance, RenderTexture texture)
             {
                 long t = Stopwatch.GetTimestamp();
+                var key = __instance.Pointer;
                 try
                 {
-                    if (StageRender.ChangeOnly) StageRender.NoteActor(__instance);
-                    return Decide(__instance, texture);
+                    if (!Copies.TryGetValue(key, out var s)) Copies[key] = s = new CopyState();
+                    s.Transform ??= __instance.transform;
+                    if (StageRender.ChangeOnly) StageRender.NoteActor(__instance, s.Transform);
+                    return Decide(__instance, texture, s);
                 }
                 catch (Exception e)
                 {
+                    // 같은 주소에 새 액터가 생겨 지난 Transform이 파괴된 경우 등: 상태를 버리고 다음 프레임에 다시 만듦
+                    Copies.Remove(key);
                     Plugin.L.LogWarning("copy hash 실패, 원래 경로로 그림: " + e.Message);
                     return true;
                 }
                 finally { ModProf.Add(ModProf.Slot.Copy, t); }
             }
 
-            static bool Decide(TransitionalRenderer renderer, RenderTexture texture)
+            static bool Decide(TransitionalRenderer renderer, RenderTexture texture, CopyState s)
             {
                 // 복사가 새 그림을 만들면 법정 카메라(바뀔 때만 그리기)에도 알림
                 if (!ChangeOnly || texture == null) { CopyDraws++; StageRender.Dirty = true; return true; }
@@ -290,9 +301,10 @@ namespace LXIUM_mahosaba
                 if (main == null) { StageRender.Dirty = true; return true; }
 
                 int version = 0;
-                var mainRt = main.TryCast<RenderTexture>();
-                // 출처를 모르는 RT(DicedSprite·영상 등)는 내용 변화를 알 수 없으므로 항상 그림
-                if (mainRt != null && !TextureVersions.TryGetValue(mainRt.Pointer, out version)) { CopyDraws++; StageRender.Dirty = true; return true; }
+                // 출처를 모르는 RT(DicedSprite·영상 등)는 내용 변화를 알 수 없으므로 항상 그림.
+                // TryCast는 래퍼를 새로 만들어서 클래스 포인터로만 확인
+                bool isRt = IL2CPP.il2cpp_class_is_assignable_from(Il2CppClassPointerStore<RenderTexture>.NativeClassPtr, IL2CPP.il2cpp_object_get_class(main.Pointer));
+                if (isRt && !TextureVersions.TryGetValue(main.Pointer, out version)) { CopyDraws++; StageRender.Dirty = true; return true; }
 
                 // 내용 버전을 뺀 입력 (전환·색·대상). 이것이 바뀌면 연출이 시작된 것
                 var tint = renderer.TintColor;
@@ -300,15 +312,14 @@ namespace LXIUM_mahosaba
                 h = h * 31 + texture.Pointer.ToInt64();
                 h = h * 31 + (renderer.TransitionTexture?.Pointer.ToInt64() ?? 0);
                 h = h * 31 + BitConverter.SingleToInt32Bits(renderer.TransitionProgress);
-                h = h * 31 + BitConverter.SingleToInt32Bits(renderer.BlurIntensity);
+                // FlipX·FlipY·BlurIntensity는 자동 속성이라 필드를 바로 읽음 (interop 속성 호출은 il2cpp_runtime_invoke를 거침)
+                h = h * 31 + BitConverter.SingleToInt32Bits(renderer._BlurIntensity_k__BackingField);
                 h = h * 31 + HashCode.Combine(tint.r, tint.g, tint.b, tint.a);
-                h = h * 31 + (renderer.FlipX ? 1 : 0) + (renderer.FlipY ? 2 : 0);
+                h = h * 31 + (renderer._FlipX_k__BackingField ? 1 : 0) + (renderer._FlipY_k__BackingField ? 2 : 0);
                 long inputs = h;
                 h = h * 31 + version;
 
-                var key = renderer.Pointer;
-                if (!Copies.TryGetValue(key, out var s)) Copies[key] = s = new CopyState { Hash = h - 1, Inputs = inputs };
-                float now = Time.unscaledTime;
+                float now = Now;
                 bool due = now - s.LastDraw >= RefreshInterval;
                 if (s.Hash == h && (!due || !TakeRefreshSlot(ref _copyRefreshFrame)))
                 {

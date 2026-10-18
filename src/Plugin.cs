@@ -63,6 +63,7 @@ namespace LXIUM_mahosaba
         void Update()
         {
             long t = Stopwatch.GetTimestamp();
+            ActorRender.Now = Time.unscaledTime;
             FrameRate.Enforce();
             if (!_urpApplied && (_urpApplied = UrpTuning.Apply())) GpuTimer.Install(this);
             CourtShaders.Tick();
