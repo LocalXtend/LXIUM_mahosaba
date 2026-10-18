@@ -7,6 +7,8 @@ namespace LXIUM_mahosaba
     static class CpuTuning
     {
         internal static bool SteamThrottle;
+        // 실험실 진단: UI 그림자(TrueShadow)의 변화 추적·다시 그리기를 모두 건너뜀 (그림자가 멈춤). 그 비용의 상한을 잼
+        internal static bool ShadowFreeze;
         static readonly long SteamInterval = Stopwatch.Frequency / 60;
 
         // Steam 콜백 처리(SteamAPI_RunCallbacks, 0.09 ms: 매번 Steam 클라이언트 파이프를 확인)를 초당 60번까지만.
@@ -24,6 +26,18 @@ namespace LXIUM_mahosaba
                 _next = now + SteamInterval;
                 return true;
             }
+        }
+
+        [HarmonyPatch(typeof(LeTai.TrueShadow.TrueShadow), "LateUpdate")]
+        static class ShadowLatePatch
+        {
+            static bool Prefix() => !ShadowFreeze;
+        }
+
+        [HarmonyPatch(typeof(LeTai.TrueShadow.TrueShadow), "OnWillRenderCanvas")]
+        static class ShadowCanvasPatch
+        {
+            static bool Prefix() => !ShadowFreeze;
         }
     }
 }

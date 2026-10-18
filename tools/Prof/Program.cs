@@ -31,11 +31,14 @@ switch (args.Length > 0 ? args[0] : "")
         "Naninovel.TransitionalRenderer::RenderToTexture", "Naninovel.TransitionalRenderer::CreateFor",
         "Naninovel.ResourceProvider::IsLocationCached",
     }); break;
-    // CPU 쪽 패치 대상 (InputThrottle)
+    // CPU 쪽 패치 대상 (CpuTuning)
     case "check-cpu-hooks": HookCheck.Run(args[1], new[]
     {
-        "Steamworks.CallbackDispatcher::RunFrame", "UnityEngine.EventSystems.EventSystem::RaycastAll",
+        "Steamworks.CallbackDispatcher::RunFrame", "LeTai.TrueShadow.TrueShadow::LateUpdate",
+        "LeTai.TrueShadow.TrueShadow::OnWillRenderCanvas",
     }); break;
+    // 게임 메서드 읽기: isil <게임 폴더> <형식::메서드>...
+    case "isil": HookCheck.Isil(args[1], args[2..]); break;
     case "cpu": await Cpu(args); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
     case "frames": await Frames(args); break;

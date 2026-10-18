@@ -45,6 +45,7 @@
     <Reference Include="$(InteropDir)\Assembly-CSharp.dll" Private="false" />
     <Reference Include="$(InteropDir)\GigaCreation.Essentials.UI.dll" Private="false" />
     <Reference Include="$(InteropDir)\com.rlabrecque.steamworks.net.dll" Private="false" />
+    <Reference Include="$(InteropDir)\LeTai.TrueShadow.dll" Private="false" />
   </ItemGroup>
 
   <!-- shaders/build_shaders.py로 만든 FireLite·CourtLite 셰이더 번들. DLL에 넣어 파일 하나로 배포 -->

@@ -156,6 +156,12 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | 모드 코드·스택을 못 푼 부분 | 약 20% |
 
 - G1 **Steam 콜백 빈도 제한** (`Cpu.SteamThrottle`): `Steamworks.CallbackDispatcher.RunFrame` 프리픽스로 초당 60번까지만 (매번 Steam 클라이언트 파이프를 `PeekNamedPipe`로 확인). Steam은 콜백을 쌓아 두었다가 다음 호출에 주므로 최대 16 ms 늦을 뿐. 341.6 → 345.5 fps [관찰: 17차]
+- 진단 상한 (18차, 실험실 `18_shadowFreeze`·`19_noEventSystem`, 기준 약 340 fps) [관찰]:
+  - UI 그림자 TrueShadow 갱신을 모두 건너뜀: −0.23~0.29 ms (372~375 fps). 켜진 그림자 61개(에셋 포함 805개)
+  - EventSystem 끔: −0.12~0.29 ms (358~375 fps)
+- TrueShadow 매 프레임 일 [관찰: ISIL `Prof isil`]: `LateUpdate`(D76620)는 그림자 오브젝트를 `SetActive(원본 그래픽 켜짐)`으로 매번 맞추고 `ShouldPerformWorks`(D76440)면 `CheckTransformDirtied`(D78620, Transform·색 추적기를 제네릭 대리자로 비교). `OnWillRenderCanvas`(D767B0)는 켜짐·`ShouldPerformWorks` 확인 뒤 텍스처가 더러울 때만 `ShadowFactory.Get`으로 다시 만들고, 그림자의 부모·형제 순서를 매번 확인(`Transform.GetSiblingIndex`·`SetParent`). 그림자 하나에 네이티브 호출 15~20번. 이 검사들이 곧 변화 감지라서 같은 결과를 지키며 건너뛸 조건이 없음 → 보류
+- UI 레이캐스터 [관찰: 진단 덤프]: 켜진 레이캐스터 25개, 검사 대상 그래픽 합계 약 60개. 그려지지 않는(depth −1) 것은 옵션 메뉴 하위 캔버스의 약 25개뿐 → 꺼진 캔버스 레이캐스트 생략은 이득이 작음
+- Naninovel `TransitionalSpriteRenderer.Update`(5F7970): 액터마다 매 프레임 머티리얼 값 쓰기 + `PrepareRenderTexture` + `Graphics.DrawMesh` 1~2번 (액터 12명에 0.09 ms)
 - 모드 부분별 시간에 `Court`(법정 변화 검사, LateTick 안)·`Masks`(F2 판단) 칸을 더함. 재판 대화 프레임당: 전환 복사 확인 0.13~0.15 ms(12번), LateTick 0.13~0.15 ms(그중 Court 0.07), Update 0.06, DrawLayers 0.05(11번), Masks 0.02 [관찰: Claude 앱 GPU 사용 중이라 실제보다 큼]
 
 ### 채택하지 않는 것
@@ -174,7 +180,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 
 1. 설정 `Debug.RenderLab = true`
 2. 캐릭터가 나오는 장면(대화) 또는 재판 장면에서 **F10**
-3. 프리셋 18개를 8초씩(안정 2초 + 측정 6초, 약 2분 40초). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
+3. 프리셋 21개를 8초씩(안정 2초 + 측정 6초, 약 3분). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
 
    | 프리셋 | 내용 |
    |---|---|
@@ -190,6 +196,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `13_current` | 진단 뒤 기준을 다시 잼 |
    | `14_screenMaskOn` / `15_current` | 법정 화면 마스크 생략 끔 / 기준. 차이 = F2 효과 |
    | `16_steamEveryFrame` / `17_current` | Steam 콜백 매 프레임 / 기준. 차이 = G1 효과 |
+   | `18_shadowFreeze` / `19_noEventSystem` / `20_current` | 진단: UI 그림자 갱신 전부 건너뛰기(그림자가 멈춤) / EventSystem 끔(입력 없음). 기준과의 차이 = 그 비용의 상한 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)
@@ -200,6 +207,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 10. `Debug.GpuTimer`가 켜져 있으면 `gpu`(프레임당 GPU 합)·`mainCam`(메인 카메라)도 적음. 각 줄의 `at=`는 측정 시작 시각 (ETW 추적·성능 카운터와 맞출 때)
 11. `Debug.LayerDiag`가 켜져 있으면 시작할 때 켜진 루트 캔버스와 화면의 4분의 1보다 큰 그래픽(화면 안 넓이, 상속 알파, 색 알파, `cullTransparentMesh`, 클릭 판정 여부, 마스크), 법정 화면 캔버스 상세(셰이더·마스크·RT 형식), 메인 카메라 HDR·MSAA를 로그에 남김
 12. **측정 환경**: 다른 프로그램이 GPU를 쓰면 결과가 크게 흔들림. 16차에 이 PC의 Claude 앱이 도구 실행 중 GPU 3D 엔진의 약 50%를 써서, 마스크 생략이 GPU를 1 ms 줄이고도 fps가 떨어지는 결과가 나왔음. 앱이 쉬는 동안 실험실을 돌리자 반대로 +10~20%. `typeperf "\GPU Engine(*engtype_3D)\Utilization Percentage"`로 프로세스별 사용률을 함께 기록할 것. 또 이 노트북(i5-1235U, 15 W급)은 CPU·GPU가 전력 한도를 나눠 써서 GPU 일을 줄이면 CPU 클럭이 오름 (UI를 뺀 진단에서 P 코어 2.1 → 2.56 GHz) → 어느 쪽을 줄여도 프레임이 빨라질 수 있음
+13. **자동 시작** (0.8.0): `BepInEx/LXIUM_mahosaba/lab.start` 파일이 생기면 F10 없이 시작 (1초마다 확인, 게임을 켜기 전에 만든 파일은 지우기만 함). 자동 입력 도구의 F10은 창 포커스·Windows 입력 도우미 창(TextInputHost)에 막혀 자주 실패했음. 세이브 불러오기는 Win32 `SetCursorPos`+`mouse_event`(DPI 인식)로 클릭. 타이틀은 BepInEx 로그에 `stage cameras=`가 찍힌 뒤에도 약 15초 지나야 입력을 받음. 불러오기 완료는 로그의 `stage court:`로 판단
 
 ## 4. 설정 (`BepInEx/config/LXIUM_mahosaba.cfg`)
 
@@ -255,6 +263,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 7. **CPU 코어별 표본** (`Prof cpu`, 0.8.0): 구간마다 스레드별로 어느 논리 프로세서에서 돌았는지(`== thread cpus`)와 추적 시작 시각을 출력. 하이브리드 CPU에서 메인 스레드가 E 코어에 머문 비율을 봄 (16차: 13~25%). 코어별 실제 클럭은 `typeperf "\Processor Information(0,N)\Actual Frequency"`
 8. interop 형식 확인: `ilspycmd -t <형식> BepInEx/interop/<어셈블리>.dll` (`dotnet tool install -g ilspycmd`). 필드·속성 형식만 보임, 메서드 본문은 GameAssembly에 있음
 9. 충돌 주소 풀기 (`Prof sym <dll> <pdb 폴더> <16진 오프셋>`, dbghelp): Windows 이벤트 로그의 `UnityPlayer.dll` 오프셋을 Unity 심볼 서버 PDB로 함수 이름으로. 17차 레이캐스트 재사용 충돌 = `GameObject_Get_Custom_PropTransform+0xA`
+10. 게임 메서드 읽기 (`Prof isil <게임 폴더> <형식::메서드>...`): Cpp2IL로 메서드를 ISIL(호출 대상 이름이 풀린 명령 목록)로 출력. 분기 조건까지 보임
 
 
 ## 8. 미확인

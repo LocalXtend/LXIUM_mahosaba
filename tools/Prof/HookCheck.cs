@@ -6,6 +6,34 @@ static class HookCheck
     const ulong ImageBase = 0x180000000;
     const string UnityVersion = "6000.0.48f1";
 
+    // 메서드를 ISIL(명령 집합에 무관한 중간 표현, 호출 대상 이름이 풀림)로 출력. 게임 코드 동작을 읽을 때
+    internal static void Isil(string gameDir, string[] targets)
+    {
+        Load(gameDir);
+        var methods = Cpp2IL.Core.Cpp2IlApi.CurrentAppContext.Assemblies.SelectMany(a => a.Types)
+            .SelectMany(t => t.Methods.Select(m => (Name: t.FullName + "::" + m.Name, Method: m))).ToArray();
+        foreach (string target in targets)
+            foreach (var (name, m) in methods.Where(x => x.Name == target))
+            {
+                Console.WriteLine($"==== {name} RVA=0x{m.UnderlyingPointer - ImageBase:X}");
+                try
+                {
+                    m.Analyze();
+                    foreach (var i in m.ConvertedIsil ?? new()) Console.WriteLine("  " + i);
+                }
+                catch (Exception e) { Console.WriteLine("  분석 실패: " + e.Message); }
+            }
+    }
+
+    static void Load(string gameDir)
+    {
+        string binary = Path.Combine(gameDir, "GameAssembly.dll");
+        string metadata = Path.Combine(gameDir, "manosaba_Data", "il2cpp_data", "Metadata", "global-metadata.dat");
+        Cpp2IL.Core.Cpp2IlApi.Init();
+        Cpp2IL.Core.Cpp2IlApi.ConfigureLib(false);
+        Cpp2IL.Core.Cpp2IlApi.InitializeLibCpp2Il(binary, metadata, AssetRipper.Primitives.UnityVersion.Parse(UnityVersion), false);
+    }
+
     internal static void Run(string gameDir, string[] extraTargets = null)
     {
         string binary = Path.Combine(gameDir, "GameAssembly.dll");

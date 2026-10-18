@@ -42,9 +42,25 @@ namespace LXIUM_mahosaba
 #endif
             if (_running || !Settings.Lab.Value) return;
             var kb = Keyboard.current;
-            if (kb == null || !kb.f10Key.wasPressedThisFrame) return;
+            if ((kb == null || !kb.f10Key.wasPressedThisFrame) && !Triggered()) return;
             _running = true;
             host.StartCoroutine(Run().WrapToIl2Cpp());
+        }
+
+        // 자동 측정용: BepInEx/LXIUM_mahosaba/lab.start 파일이 생기면 F10 없이 시작 (키 입력은 창 포커스·입력 도우미 창에 막힐 수 있음).
+        // 1초마다 확인
+        static float _nextPoll;
+
+        static bool Triggered()
+        {
+            if (Time.unscaledTime < _nextPoll) return false;
+            _nextPoll = Time.unscaledTime + 1f;
+            string path = Path.Combine(Dir, "lab.start");
+            if (!File.Exists(path)) return false;
+            // 게임을 켜기 전에 만든 파일은 지난 실행의 것이라 지우기만 함
+            bool fresh = File.GetLastWriteTime(path) >= System.Diagnostics.Process.GetCurrentProcess().StartTime;
+            File.Delete(path);
+            return fresh;
         }
 
         // 각 실험은 ApplySettings() 뒤에 적용됨. null이면 지금 설정 그대로
@@ -90,6 +106,10 @@ namespace LXIUM_mahosaba
             // Steam 콜백 빈도 제한 끔. 15와의 차이 = 효과
             ("16_steamEveryFrame", () => CpuTuning.SteamThrottle = false),
             ("17_current", null),
+            // 진단: UI 그림자 갱신 전부 건너뛰기 / EventSystem 끄기(측정 동안 입력 없음). 기준과의 차이 = 그 비용의 상한
+            ("18_shadowFreeze", () => CpuTuning.ShadowFreeze = true),
+            ("19_noEventSystem", () => { _diagEvents = UnityEngine.EventSystems.EventSystem.current; if (_diagEvents != null) _diagEvents.enabled = false; }),
+            ("20_current", null),
 #endif
         };
 #if DEBUG && LXIUM_UI_BENCH
@@ -101,6 +121,7 @@ namespace LXIUM_mahosaba
         static int _diagMask;
         static bool _diagPost;
         static Canvas _diagCanvas;
+        static UnityEngine.EventSystems.EventSystem _diagEvents;
 
         static void MainDiag(string part)
         {
@@ -123,6 +144,8 @@ namespace LXIUM_mahosaba
 
         static void RestoreDiag()
         {
+            if (_diagEvents != null) _diagEvents.enabled = true;
+            _diagEvents = null;
             if (_diagCam == null) return;
             _diagCam.cullingMask = _diagMask;
             var data = _diagCam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
@@ -147,6 +170,7 @@ namespace LXIUM_mahosaba
             StageRender.MainPostOff = Settings.MainPostOff.Value;
             StageRender.MaskSkip = Settings.StageMaskSkip.Value;
             CpuTuning.SteamThrottle = Settings.SteamThrottle.Value;
+            CpuTuning.ShadowFreeze = false;
             // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
             StageRender.Dirty = true;
             StageRender.ResolutionOverride = null;
@@ -204,6 +228,25 @@ namespace LXIUM_mahosaba
                                      $"mask={(m == null ? "-" : $"{m.enabled}/show={m.showMaskGraphic}")} " +
                                      (rt == null ? "" : $"rt={rt.width}x{rt.height} {rt.graphicsFormat} aa={rt.antiAliasing} mip={rt.useMipMap} depth={rt.depthStencilFormat}"));
                 }
+            int shadows = 0, shadowsOn = 0;
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<LeTai.TrueShadow.TrueShadow>()))
+            {
+                shadows++;
+                if (o.Cast<LeTai.TrueShadow.TrueShadow>().isActiveAndEnabled) shadowsOn++;
+            }
+            Plugin.L.LogInfo($"true shadow: {shadowsOn} 켜짐 / {shadows}");
+            // UI 레이캐스터마다 캔버스 상태와 검사하는 그래픽 수 (꺼진 Canvas의 그래픽은 depth -1이라 맞지 않음)
+            foreach (var o in Resources.FindObjectsOfTypeAll(Il2CppInterop.Runtime.Il2CppType.Of<UnityEngine.UI.GraphicRaycaster>()))
+            {
+                var r = o.Cast<UnityEngine.UI.GraphicRaycaster>();
+                if (!r.isActiveAndEnabled) continue;
+                var c = r.GetComponent<Canvas>();
+                var list = c == null ? null : UnityEngine.UI.GraphicRegistry.GetRaycastableGraphicsForCanvas(c);
+                int n = list == null ? 0 : list.Cast<Il2CppSystem.Collections.Generic.ICollection<UnityEngine.UI.Graphic>>().Count, drawn = 0;
+                for (int i = 0; i < n; i++)
+                    if (list[i].depth != -1) drawn++;
+                Plugin.L.LogInfo($"raycaster {r.name} canvas={(c == null ? "-" : c.enabled.ToString())} root={c?.isRootCanvas} graphics={n} drawn={drawn}");
+            }
             var main = Camera.main;
             var asset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline?.TryCast<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>();
             if (main != null)
