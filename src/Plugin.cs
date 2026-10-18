@@ -70,6 +70,7 @@ namespace LXIUM_mahosaba
             Hud.Tick();
             ActorRender.DiagTick();
             ResourceIndex.DiagTick();
+            RevealWork.Tick();
             ModProf.Tick();
             if (!_textApplied) _textApplied = TextTuning.Apply();
             // IMGUI(OnGUI)는 켜 두기만 해도 매 프레임 비용이 있어 화면 패널·실험실 안내가 있을 때만 켬

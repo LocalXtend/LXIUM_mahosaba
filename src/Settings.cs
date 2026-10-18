@@ -21,6 +21,7 @@ namespace LXIUM_mahosaba
         public static ConfigEntry<bool> CourtLite;
         public static ConfigEntry<bool> StageChangeOnly;
         public static ConfigEntry<bool> FastGlyphs;
+        public static ConfigEntry<bool> RevealReuse;
         public static ConfigEntry<bool> GpuTimer;
         public static ConfigEntry<bool> Lab;
         public static ConfigEntry<bool> LayerDiag;
@@ -61,6 +62,8 @@ namespace LXIUM_mahosaba
                 "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 이 표 읽기가 글자마다 수십 ms라 처음 보는 한글이 많은 화면(불러오기 목록 등)에서 0.4초 멈춤이 생김. 한글 음절에는 합자가 없어 모양은 같음");
             GpuTimer = c.Bind("Debug", "GpuTimer", false,
                 "카메라별 GPU 시간을 재서 5초마다 로그에 남기고 화면 패널(PgUp)에 보여 줌 (D3D11 타임스탬프 쿼리, 분석용)");
+            RevealReuse = c.Bind("Text", "RevealReuse", false,
+                "실험: 대사가 완전히 나타난 뒤에는 글자별 투명도 계산과 색상 버퍼 업로드를 쉬게 함. 새 대사·되감기·글자 재생성 때 원래 경로로 복귀. 전체 연출 검증 전 기본 끔");
             LayerDiag = c.Bind("Debug", "LayerDiag", false,
                 "캐릭터 다시 합성 원인 기록: 5초마다 어떤 캐릭터의 어떤 레이어가 왜 바뀌었는지 로그에 남김 (분석용)");
             Lab = c.Bind("Debug", "RenderLab", false,

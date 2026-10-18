@@ -7,8 +7,8 @@ namespace LXIUM_mahosaba
     // 진단 설정(Debug.LayerDiag)이면 5초마다 부분별 프레임당 시간·호출 수를 로그에 남김
     static class ModProf
     {
-        internal enum Slot { Update, Late, Layers, Copy, Camera, Gui, Index }
-        static readonly string[] Names = { "Update", "LateTick", "DrawLayers", "Copy", "BeginCamera", "OnGUI", "ResourceIndex" };
+        internal enum Slot { Update, Late, Layers, Copy, Camera, Gui, Index, Text }
+        static readonly string[] Names = { "Update", "LateTick", "DrawLayers", "Copy", "BeginCamera", "OnGUI", "ResourceIndex", "Reveal" };
         static readonly long[] Ticks = new long[Names.Length];
         static readonly int[] Calls = new int[Names.Length];
         static float _next;

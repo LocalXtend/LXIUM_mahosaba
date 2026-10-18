@@ -32,6 +32,14 @@ namespace LXIUM_mahosaba
 
         public static void Tick(Host host)
         {
+#if DEBUG && LXIUM_UI_BENCH
+            // 입력 자동화가 새 Input System의 기능키를 전달하지 못할 때 쓰는 개발 전용 비교 실행.
+            if (!_autoStarted && Settings.Lab.Value && Time.unscaledTime > 120f)
+            {
+                _autoStarted = _running = true;
+                host.StartCoroutine(Run().WrapToIl2Cpp());
+            }
+#endif
             if (_running || !Settings.Lab.Value) return;
             var kb = Keyboard.current;
             if (kb == null || !kb.f10Key.wasPressedThisFrame) return;
@@ -42,6 +50,12 @@ namespace LXIUM_mahosaba
         // 각 실험은 ApplySettings() 뒤에 적용됨. null이면 지금 설정 그대로
         static readonly (string Name, Action Apply)[] Presets =
         {
+#if DEBUG && LXIUM_UI_BENCH
+            ("00_revealOff", () => RevealWork.Enabled = false),
+            ("01_revealOn", () => RevealWork.Enabled = true),
+            ("02_revealOff", () => RevealWork.Enabled = false),
+            ("03_revealOn", () => RevealWork.Enabled = true),
+#else
             ("00_original", () =>
             {
                 UrpTuning.Set(false, SsaoMode.Game, false);
@@ -50,6 +64,7 @@ namespace LXIUM_mahosaba
                 StageRender.ResolutionOverride = 1f;
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
                 ActorRender.FastDetect = false;
+                RevealWork.Enabled = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
@@ -58,13 +73,21 @@ namespace LXIUM_mahosaba
             ("03_stageChangeOnly", () => StageRender.ChangeOnly = true),
             ("04_stageChangeOnlyOff", () => StageRender.ChangeOnly = false),
             ("05_current", null),
+            ("06_revealOn", () => RevealWork.Enabled = true),
+            ("07_revealOff", () => RevealWork.Enabled = false),
+            ("08_current", null),
+#endif
         };
+#if DEBUG && LXIUM_UI_BENCH
+        static bool _autoStarted;
+#endif
 
         public static void ApplySettings()
         {
             UrpTuning.Set(Settings.MsaaOff.Value, Settings.Ssao.Value, Settings.IntermediateAuto.Value);
             ActorRender.ChangeOnly = Settings.CharacterChangeOnly.Value;
             ActorRender.FastDetect = Settings.FastDetect.Value;
+            RevealWork.Enabled = Settings.RevealReuse.Value;
             StageRender.HiddenSkip = Settings.StageHiddenSkip.Value;
             StageRender.MsaaOff = Settings.StageMsaaOff.Value;
             StageRender.PostOff = Settings.StagePostOff.Value;

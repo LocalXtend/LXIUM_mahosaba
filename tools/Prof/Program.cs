@@ -1,5 +1,6 @@
 // LXIUM 프로파일러: 게임 실행 중 WPR로 잡은 ETW 추적(.etl)에서 manosaba.exe의 CPU 샘플을 함수 이름으로 묶어 본다.
 //   map <게임 폴더> <map.tsv>           GameAssembly.dll(IL2CPP)의 메서드 주소표를 Cpp2IL로 만듦 (PDB가 없으므로)
+//   check-ui-hooks <게임 폴더>         UI 패치 대상의 주소를 전체 메서드와 대조해 ICF 공유가 없음을 검사
 //   cpu <trace.etl> <map.tsv> [시작초 끝초] [-thread 이름]
 //                                        구간의 CPU 샘플을 스레드·모듈·함수별로 집계. UnityPlayer.dll은 Unity 심볼 서버의 PDB로,
 //                                        GameAssembly.dll은 map.tsv로 이름을 붙임
@@ -19,6 +20,7 @@ const ulong ImageBase = 0x180000000;
 switch (args.Length > 0 ? args[0] : "")
 {
     case "map": Map(args[1], args[2]); break;
+    case "check-ui-hooks": HookCheck.Run(args[1]); break;
     case "cpu": await Cpu(args); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
     case "frames": await Frames(args); break;
