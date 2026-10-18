@@ -65,6 +65,7 @@ namespace LXIUM_mahosaba
                 CourtShaders.Fire.On = CourtShaders.Court.On = false;
                 ActorRender.FastDetect = false;
                 RevealWork.Enabled = false;
+                CpuTuning.SteamThrottle = false;
             }),
             ("01_current", null),
             // 진단: 법정 카메라를 멈춤. 남는 시간 = 메인 카메라(UI·대사·무대 화면 붙이기) + 캐릭터 + CPU
@@ -86,6 +87,9 @@ namespace LXIUM_mahosaba
             // 법정 화면 마스크 생략 끔. 13과의 차이 = Stage.ScreenMaskSkip 효과
             ("14_screenMaskOn", () => StageRender.MaskSkip = false),
             ("15_current", null),
+            // Steam 콜백 빈도 제한 끔. 15와의 차이 = 효과
+            ("16_steamEveryFrame", () => CpuTuning.SteamThrottle = false),
+            ("17_current", null),
 #endif
         };
 #if DEBUG && LXIUM_UI_BENCH
@@ -142,6 +146,7 @@ namespace LXIUM_mahosaba
             StageRender.ChangeOnly = Settings.StageChangeOnly.Value;
             StageRender.MainPostOff = Settings.MainPostOff.Value;
             StageRender.MaskSkip = Settings.StageMaskSkip.Value;
+            CpuTuning.SteamThrottle = Settings.SteamThrottle.Value;
             // 설정이 바뀌면 법정 그림도 달라질 수 있으므로 한 번 다시 그림
             StageRender.Dirty = true;
             StageRender.ResolutionOverride = null;
@@ -241,6 +246,8 @@ namespace LXIUM_mahosaba
                 Status = $"LXIUM 렌더 실험 {i + 1}/{Presets.Length} ({name}) — 화면을 그대로 두세요";
                 for (float t = 0; t < Settle; t += Time.unscaledDeltaTime) yield return null;
 
+                // 안내 상자(IMGUI)는 프레임당 약 0.13 ms라 측정 동안은 숨김 (17차)
+                Status = null;
                 times.Clear();
                 long mod = ModTicks;
                 double gpu0 = GpuTimer.TotalMs, main0 = GpuTimer.Cameras.GetValueOrDefault("MainCamera").Ms;

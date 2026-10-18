@@ -149,6 +149,13 @@ namespace LXIUM_mahosaba
             },
             new()
             {
+                Text = () => "Steam 콜백 초당 60번",
+                On = () => CpuTuning.SteamThrottle,
+                Help = "기능: 게임이 매 프레임 하는 Steam 콜백 처리(Steam 클라이언트 확인)를 초당 60번까지만. 알림은 최대 16 ms 늦을 뿐 놓치지 않음.\n" +
+                       "측정: 메인 스레드 프레임당 약 0.07 ms, 341.6 → 345.5 fps (17차).\n개선 가능성: 다 함.",
+            },
+            new()
+            {
                 Text = () => "법정 카메라 정지 (진단)",
                 On = () => StageRender.Freeze,
                 Help = "렌더 실험실 진단: 법정 카메라를 멈춰 나머지(대사·UI·화면 합치기)의 비용만 잼.",

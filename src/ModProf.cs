@@ -7,8 +7,9 @@ namespace LXIUM_mahosaba
     // 진단 설정(Debug.LayerDiag)이면 5초마다 부분별 프레임당 시간·호출 수를 로그에 남김
     static class ModProf
     {
-        internal enum Slot { Update, Late, Layers, Copy, Camera, Gui, Index, Text }
-        static readonly string[] Names = { "Update", "LateTick", "DrawLayers", "Copy", "BeginCamera", "OnGUI", "ResourceIndex", "Reveal" };
+        // Court는 LateTick 안의 법정 변화 검사라 합계에 두 번 넣지 않음
+        internal enum Slot { Update, Late, Layers, Copy, Camera, Gui, Index, Text, Court, Masks }
+        static readonly string[] Names = { "Update", "LateTick", "DrawLayers", "Copy", "BeginCamera", "OnGUI", "ResourceIndex", "Reveal", "Court", "Masks" };
         static readonly long[] Ticks = new long[Names.Length];
         static readonly int[] Calls = new int[Names.Length];
         static float _next;
@@ -19,7 +20,7 @@ namespace LXIUM_mahosaba
             long d = Stopwatch.GetTimestamp() - start;
             Ticks[(int)slot] += d;
             Calls[(int)slot]++;
-            if (slot != Slot.Index) RenderLab.ModTicks += d;
+            if (slot != Slot.Index && slot != Slot.Court) RenderLab.ModTicks += d;
         }
 
         internal static void Tick()

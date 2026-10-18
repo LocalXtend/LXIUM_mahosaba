@@ -143,6 +143,21 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
   - 결과 (16차, 다른 프로그램의 GPU 사용 없이): 메인 카메라 GPU 2.10 → 0.88 ms, 288 → 317 fps, 스크린샷 평균 차이 0.018/255 [관찰]
 - F3 **버그 수정**: B의 숨은 화면 RawImage `cull`을 풀 때 `Graphic.OnCullingChanged()`를 부름 (`MaskableGraphic.UpdateCull`과 같음). 없으면 cull 동안 건너뛴 다시 만들기가 등록되지 않아, 그 사이 메시가 지워진 경우(이미지 끔·켬 등) 법정이 검게 남음 [관찰: 실험실 진단에서 재현]
 
+### G. 메인 스레드 CPU 줄이기 (0.8.0)
+
+17차 ETW(F 뒤, 1080p 재판 대화, 다른 프로그램의 GPU 사용 없이): 프레임 2.9~3.2 ms 중 GPU 0.8~0.9 ms → **CPU가 걸림돌**. 메인 스레드 프레임당 약 3.2 ms [관찰: 호출 트리]:
+
+| 부분 | 비중 |
+|---|---|
+| 렌더 (URP: 렌더 그래프 기록 4.5%, 컬링 4.4%, 렌더 그래프 실행 3.3%, 그리기 제출 4.8%) | 25% |
+| Update (`EventSystem` 레이캐스트 5.9%, Naninovel `TransitionalSpriteRenderer.Update` 3.1%, Steam 콜백 2.7%) | 15% |
+| 캔버스 (`CanvasUpdateRegistry.PerformUpdate` 5%: `RectMask2D` 잘라내기 3.3%, TrueShadow `OnWillRenderCanvas` 4%: `Graphic.canvas` → `GetComponentsInParent`) | 12% |
+| LateUpdate (TrueShadow 변화 추적 4.3%) | 7% |
+| 모드 코드·스택을 못 푼 부분 | 약 20% |
+
+- G1 **Steam 콜백 빈도 제한** (`Cpu.SteamThrottle`): `Steamworks.CallbackDispatcher.RunFrame` 프리픽스로 초당 60번까지만 (매번 Steam 클라이언트 파이프를 `PeekNamedPipe`로 확인). Steam은 콜백을 쌓아 두었다가 다음 호출에 주므로 최대 16 ms 늦을 뿐. 341.6 → 345.5 fps [관찰: 17차]
+- 모드 부분별 시간에 `Court`(법정 변화 검사, LateTick 안)·`Masks`(F2 판단) 칸을 더함. 재판 대화 프레임당: 전환 복사 확인 0.13~0.15 ms(12번), LateTick 0.13~0.15 ms(그중 Court 0.07), Update 0.06, DrawLayers 0.05(11번), Masks 0.02 [관찰: Claude 앱 GPU 사용 중이라 실제보다 큼]
+
 ### 채택하지 않는 것
 
 | 힌트 | 이유 |
@@ -151,13 +166,15 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | Opaque Ice (투명 → 불투명) | B1·B2 뒤에는 투명 쿼드 몇 장만 남아 이득이 작음 [추론] |
 | 메인 카메라 Render Scale + FSR | 메인 카메라에 UI·대사가 같이 그려져 글자가 흐려짐 (mahosaba.md 7장). B3이 같은 효과를 월드에만 줌 |
 | 투명 UI 그리기 생략 (`cullTransparentMesh`, CanvasGroup 알파 0 그래픽 `cull`) | 모든 그래픽이 이미 `cullTransparentMesh=true`. 알파 0인 화면 크기 그래픽 46개를 `cull`해도 GPU 차이 0 → Unity가 이미 건너뜀 [관찰: 15·16차] |
+| URP 렌더 그래프 끄기 (호환 모드, `RenderGraphSettings.m_EnableRenderCompatibilityMode`를 Load에서 켬. 속성 setter는 플레이어 빌드에서 예외) | 더 느림: 345 → 280 fps, 메인 카메라 GPU 0.82 → 1.85 ms (호환 경로가 패스를 더 씀) [관찰: 17차] |
+| UI 레이캐스트 결과 재사용 (`EventSystem.RaycastAll`, 마우스가 그대로면 16 ms 동안 지난 결과) | 게임이 시작하자마자 `GameObject.get_transform` 접근 위반으로 꺼짐 (재사용한 결과의 오브젝트). 이득 약 0.15 ms에 비해 입력 위험이 커서 뺌 [관찰: 17차] |
 | 하이브리드 CPU 스레드 배치 (CPU 세트로 메인·렌더 스레드를 P 코어에, 나머지를 E 코어에) | i5-1235U에서 효과 없음: 윈도우에 맡김 303, P 코어 고정 289, 나머지 E 코어 306 fps, E 코어 쪽은 p99가 나빠짐 [관찰: 16차] |
 
 ## 3. 검증 절차 (렌더 실험실)
 
 1. 설정 `Debug.RenderLab = true`
 2. 캐릭터가 나오는 장면(대화) 또는 재판 장면에서 **F10**
-3. 프리셋 16개를 8초씩(안정 2초 + 측정 6초, 약 2분 20초). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
+3. 프리셋 18개를 8초씩(안정 2초 + 측정 6초, 약 2분 40초). 측정하는 6초 동안은 안내 상자(IMGUI, 프레임당 약 0.13 ms)를 숨김 (0.8.0부터, 그 전 기록의 fps는 그만큼 낮음: 17차 기준 317 → 345). 매번 설정값으로 되돌린 뒤 하나만 바꿈 (0.8.0. 0.7.0은 9개, 0.5.x·0.6.x는 6개, 0.4.x·0.3.x는 7개, 0.2.3은 10개, 0.2.2는 12개, 0.2.1은 11개, 0.2.0은 14개, 0.1.x는 누적 7단계). 결론이 난 실험(SSAO 품질, 원본 불, 반 프레임, 해상도 75%, 화면 컬링, CourtLite, 건물 캐시, 빠른 감지)은 뺌
 
    | 프리셋 | 내용 |
    |---|---|
@@ -172,6 +189,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
    | `10_noUi` / `11_noStageScreen` / `12_noWorld` | 진단: 메인 카메라에서 UI 레이어 / 법정 화면 캔버스 / 월드 레이어를 뺌. 화면이 잠깐 이상해짐. GPU 타이머로 그 몫을 잼 |
    | `13_current` | 진단 뒤 기준을 다시 잼 |
    | `14_screenMaskOn` / `15_current` | 법정 화면 마스크 생략 끔 / 기준. 차이 = F2 효과 |
+   | `16_steamEveryFrame` / `17_current` | Steam 콜백 매 프레임 / 기준. 차이 = G1 효과 |
 
 4. 측정 중에는 프레임 제한·VSync를 끔. 결과는 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 프리셋별 스크린샷(JPG)
 5. 기록 값: fps, 프레임 시간 avg·p50·p95·p99·max, 프레임당 카메라 렌더 수, `layerDraw`/`layerSkip`(B1), `copyDraw`/`copySkip`(B2), `stageSkip`(B4·B6), `modCpu`(모드가 프레임당 쓰는 메인 스레드 시간: 패치·Host·카메라 콜백·화면 패널, 0.2.3)
@@ -205,6 +223,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 | `Text.FastGlyphs` | true (0.6.0) | 동적으로 더해지는 글자에 합자·커닝이 적용되지 않음. 한글 음절은 합자가 없음 |
 | `Urp.MainPostOff` | true (0.8.0) | 법정 가장자리는 같음 (법정 카메라 FXAA). UI 글자는 FXAA가 빠져 약간 선명 |
 | `Stage.ScreenMaskSkip` | true (0.8.0) | 없음. 화면 분할 연출이 시작되는 프레임부터 마스크를 다시 씀 |
+| `Cpu.SteamThrottle` | true (0.8.0) | 없음. Steam 알림이 최대 16 ms 늦음 |
 | `Text.RevealReuse` | false (0.7.0) | 실험. 표시 완료 대사의 알파 갱신 생략, 화질 차이 없이 약 0.03 ms CPU 절감(한 장면). 전체 연출 검증 전 기본 끔 |
 | `Debug.LayerDiag` | false (0.6.0) | — (분석용 로그) |
 | `Debug.GpuTimer` | false (0.6.1) | — (분석용. 카메라별 GPU 시간) |
@@ -235,6 +254,7 @@ UHD 620에서 120fps: A+B1+B2 뒤 대화 장면의 매 프레임 일은 1080p �
 6. **RenderDoc 메모**: Steam 게임이라 exe를 직접 켜면 Steam이 다시 실행해 주입이 풀림 → 잴 때만 게임 폴더에 `steam_appid.txt`(3101040)를 두고 끝나면 지움. 이렇게 켜도 **BepInEx가 로드되지 않음**(로그가 갱신되지 않음, RenderDoc과 doorstop이 둘 다 시작 단계를 가로채는 것으로 보임) → 캡처는 모드 없는 원래 게임의 프레임. F12는 Steam 스크린샷 키와 겹치고, PrintScreen은 Windows 캡처 도구를 엶. 분석 스크립트 `tools/Prof/rdc_frame.py`(qrenderdoc `--python`, 첫 실행 안내창을 끄는 설정 필요)
 7. **CPU 코어별 표본** (`Prof cpu`, 0.8.0): 구간마다 스레드별로 어느 논리 프로세서에서 돌았는지(`== thread cpus`)와 추적 시작 시각을 출력. 하이브리드 CPU에서 메인 스레드가 E 코어에 머문 비율을 봄 (16차: 13~25%). 코어별 실제 클럭은 `typeperf "\Processor Information(0,N)\Actual Frequency"`
 8. interop 형식 확인: `ilspycmd -t <형식> BepInEx/interop/<어셈블리>.dll` (`dotnet tool install -g ilspycmd`). 필드·속성 형식만 보임, 메서드 본문은 GameAssembly에 있음
+9. 충돌 주소 풀기 (`Prof sym <dll> <pdb 폴더> <16진 오프셋>`, dbghelp): Windows 이벤트 로그의 `UnityPlayer.dll` 오프셋을 Unity 심볼 서버 PDB로 함수 이름으로. 17차 레이캐스트 재사용 충돌 = `GameObject_Get_Custom_PropTransform+0xA`
 
 
 ## 8. 미확인

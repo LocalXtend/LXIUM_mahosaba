@@ -130,7 +130,12 @@ namespace LXIUM_mahosaba
             // RT를 다시 만들거나 후처리·깊이를 바꾸면 그림이 달라짐
             if (Resize() | ApplyCameraData()) Dirty = true;
             if (_presented is not bool presented) return;
-            if (ChangeOnly && SceneChanged()) _version++;
+            if (ChangeOnly)
+            {
+                long t = Stopwatch.GetTimestamp();
+                if (SceneChanged()) _version++;
+                ModProf.Add(ModProf.Slot.Court, t);
+            }
             float now = Time.unscaledTime;
             for (int i = 0; i < _cameras.Length; i++)
             {
@@ -300,7 +305,7 @@ namespace LXIUM_mahosaba
                 _maskOff[i] = off;
                 if (Settings.LayerDiag.Value) Plugin.L.LogInfo($"stage screen {i} mask {(off ? "끔" : "켬")} quad={_quads[i]._x} {_quads[i]._y} {_quads[i]._z} {_quads[i]._w}");
             }
-            ModProf.Add(ModProf.Slot.Late, t);
+            ModProf.Add(ModProf.Slot.Masks, t);
         }
 
         static bool Covers(int i)

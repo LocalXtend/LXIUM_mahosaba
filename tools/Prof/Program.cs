@@ -29,12 +29,19 @@ switch (args.Length > 0 ? args[0] : "")
         "Naninovel.LayeredActorBehaviour::RebuildLayers", "Naninovel.LayeredDrawer::ClearLayers", "Naninovel.LayeredDrawer::DrawLayers",
         "Naninovel.LayeredRendererLayer::set_Enabled", "WitchTrials.Views.StageCameraController::SetCameraEnabled",
         "Naninovel.TransitionalRenderer::RenderToTexture", "Naninovel.TransitionalRenderer::CreateFor",
-        "Naninovel.ResourceProvider::IsLocationCached", "UnityEngine.UI.Graphic::OnEnable",
+        "Naninovel.ResourceProvider::IsLocationCached",
+    }); break;
+    // CPU 쪽 패치 대상 (InputThrottle)
+    case "check-cpu-hooks": HookCheck.Run(args[1], new[]
+    {
+        "Steamworks.CallbackDispatcher::RunFrame", "UnityEngine.EventSystems.EventSystem::RaycastAll",
     }); break;
     case "cpu": await Cpu(args); break;
     case "timeline": Timeline(args[1], args.Length > 2 ? double.Parse(args[2]) : 100); break;
     case "frames": await Frames(args); break;
     case "tree": await Tree(args); break;
+    // 충돌 주소 풀기: sym <dll 경로> <pdb가 있는 폴더> <16진 오프셋>...
+    case "sym": Sym(args[1], args[2], args.Skip(3).Select(a => Convert.ToUInt64(a, 16)).ToArray()); break;
     default: Console.WriteLine("map | cpu | timeline (Program.cs 맨 위 참고)"); break;
 }
 
@@ -306,6 +313,41 @@ static void Top(Dictionary<string, double> d, double all, int n)
 {
     foreach (var (k, v) in d.OrderByDescending(x => x.Value).Take(n))
         Console.WriteLine($"{v,9:F1} ms {v / all * 100,5:F1}%  {(k.Length > 150 ? k[..150] : k)}");
+}
+
+
+static void Sym(string dll, string symDir, ulong[] offsets)
+{
+    var proc = new IntPtr(1);
+    if (!DbgHelp.SymInitialize(proc, symDir, false)) { Console.WriteLine("SymInitialize 실패"); return; }
+    const ulong Base = 0x10000000;
+    if (DbgHelp.SymLoadModuleEx(proc, IntPtr.Zero, dll, null, Base, 0, IntPtr.Zero, 0) == 0) { Console.WriteLine("모듈 로드 실패"); return; }
+    foreach (var off in offsets)
+    {
+        var buf = new byte[DbgHelp.SymbolInfoSize + 1024];
+        BitConverter.GetBytes(DbgHelp.SymbolInfoSize).CopyTo(buf, 0);
+        BitConverter.GetBytes(1000).CopyTo(buf, 80);
+        var h = System.Runtime.InteropServices.GCHandle.Alloc(buf, System.Runtime.InteropServices.GCHandleType.Pinned);
+        bool ok = DbgHelp.SymFromAddr(proc, Base + off, out ulong disp, h.AddrOfPinnedObject());
+        h.Free();
+        int len = BitConverter.ToInt32(buf, 76);
+        string name = ok ? System.Text.Encoding.ASCII.GetString(buf, 84, len) : "?";
+        Console.WriteLine($"+0x{off:X} {name}+0x{disp:X}");
+    }
+    DbgHelp.SymCleanup(proc);
+}
+
+static class DbgHelp
+{
+    internal const int SymbolInfoSize = 88;
+    [System.Runtime.InteropServices.DllImport("dbghelp.dll", CharSet = System.Runtime.InteropServices.CharSet.Ansi)]
+    internal static extern bool SymInitialize(IntPtr process, string searchPath, bool invade);
+    [System.Runtime.InteropServices.DllImport("dbghelp.dll", CharSet = System.Runtime.InteropServices.CharSet.Ansi)]
+    internal static extern ulong SymLoadModuleEx(IntPtr process, IntPtr file, string imageName, string moduleName, ulong baseOfDll, uint dllSize, IntPtr data, uint flags);
+    [System.Runtime.InteropServices.DllImport("dbghelp.dll")]
+    internal static extern bool SymFromAddr(IntPtr process, ulong address, out ulong displacement, IntPtr symbol);
+    [System.Runtime.InteropServices.DllImport("dbghelp.dll")]
+    internal static extern bool SymCleanup(IntPtr process);
 }
 
 sealed class Node
