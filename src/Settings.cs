@@ -1,8 +1,10 @@
 using BepInEx.Configuration;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // 설정 항목. 기본값은 측정에서 화질이 바뀌지 않거나 거의 같은 것만 켬 (docs/ai/mahosaba-render.md 2·4장)
+    // 설정 항목. 기본값은 측정에서 화질이 바뀌지 않거나 거의 같은 것만 켬 (docs/ai/manosaba-render.md 2·4장)
+    // 설정 파일에는 설명을 쓰지 않음: 형식·범위·언어별 설명은 저장소 루트의 LXIUM_manosaba.lxconfig (LXIUM docs/ai/lxconfig.md).
+    // 항목을 더하거나 바꾸면 .lxconfig도 같은 커밋에서 고침
     static class Settings
     {
         public static ConfigEntry<int> TargetFps;
@@ -32,54 +34,30 @@ namespace LXIUM_mahosaba
 
         public static void Bind(ConfigFile c)
         {
-            TargetFps = c.Bind("FrameRate", "TargetFps", 0,
-                "0 = 모니터 주사율에 맞춤(VSync 켬), -1 = 제한 없음(VSync 끔), 그 밖의 숫자 = 그 fps로 제한(VSync 끔). 게임의 60/30 설정보다 우선");
-            MsaaOff = c.Bind("Urp", "MsaaOff", true,
-                "2D(직교) 카메라의 MSAA 4x를 끔. 스프라이트·UI는 가장자리가 투명이라 MSAA 효과가 없음. 3D 법정 카메라는 [Stage] MsaaOff가 정함");
-            Ssao = c.Bind("Urp", "Ssao", SsaoMode.Off,
-                "SSAO(화면 공간 앰비언트 오클루전) 적용 범위. Off = 모두 끔, StageLite = 3D 법정 카메라만 + 절반 해상도·낮은 품질, StageOnly = 법정만 원래 품질, Game = 원래대로 모든 카메라. 법정 조명이 스포트라이트뿐이라 768p·1080p 측정 모두 넷의 법정 화면이 화소까지 같았음");
-            IntermediateAuto = c.Bind("Urp", "IntermediateAuto", true,
-                "렌더러의 중간 텍스처를 Always에서 Auto로. 필요 없는 카메라(캐릭터 합성 등)의 복사 패스를 없앰");
-            CharacterChangeOnly = c.Bind("Character", "ChangeOnly", true,
-                "레이어 캐릭터를 바뀐 프레임에만 다시 합성. 게임은 표정이 그대로여도 매 프레임 카메라 렌더를 함");
-            FastDetect = c.Bind("Character", "FastDetect", true,
-                "바뀔 때만 다시 그리기의 변화 확인을 가볍게: Naninovel이 표정·옷을 바꿀 때 보내는 신호를 받아 그때만 확인. 캐릭터마다 2초에 한 번은 직접 확인 (신호로 못 잡은 변화는 최대 2초 늦음)");
-            CharacterResolution = c.Bind("Character", "Resolution", 0f,
-                "레이어 캐릭터 합성 해상도 배율. 0 = 화면 해상도에 맞춤(1080p에서 0.75), 1 = 원래(100 PPU)");
-            StageResolution = c.Bind("Stage", "Resolution", 0f,
-                "재판 3D 무대 렌더 텍스처 배율 (원래 1920x1080 고정). 0 = 화면 높이에 맞춤(1080 이상이면 원래 크기), 1 = 원래");
-            StageHiddenSkip = c.Bind("Stage", "HiddenSkip", true,
-                "화면에 보이지 않는 무대 카메라는 그리지 않음");
-            StageMsaaOff = c.Bind("Stage", "MsaaOff", true,
-                "법정 렌더 텍스처의 MSAA 2x를 끔. 가장자리는 FXAA가 다듬음 (측정 장면에서 화면 차이 없음)");
-            StagePostOff = c.Bind("Stage", "PostOff", true,
-                "법정 카메라의 후처리(색 보정 표 + FXAA)를 끔. 볼륨 효과가 모두 0이라 색은 같고, 화면 전체 FXAA는 메인 카메라가 한 번 더 함");
-            MainPostOff = c.Bind("Urp", "MainPostOff", true,
-                "메인 카메라(배경·법정 화면·UI를 화면에 합치는 카메라)의 후처리를 끔. 볼륨 효과가 모두 0이라 하는 일은 FXAA뿐이고 1080p에서 그래픽 칩 1.3 ms. 법정은 법정 카메라가 자기 FXAA를 켜서 가장자리가 그대로. 게임 옵션의 포스트 프로세싱보다 우선");
-            StageHalfRate = c.Bind("Stage", "HalfRate", false,
-                "법정 카메라가 멈춰 있으면 두 프레임에 한 번만 그림. 움직일 때는 매 프레임. 불·캐릭터 변화가 반 박자 늦을 수 있음");
-            FireLite = c.Bind("Stage", "FireLite", true,
-                "법정 불을 LXIUM FireLite 셰이더로 그림 (텍스처 읽기 8 → 4회, 불 비용 약 1/4. 벽·바닥과 닿는 곳의 흐림 없음). Direct3D 11 전용, 다른 API에서는 원본");
-            CourtLite = c.Bind("Stage", "CourtLite", true,
-                "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (URP Lit에서 그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본");
-            StageChangeOnly = c.Bind("Stage", "CourtChangeOnly", true,
-                "법정 카메라가 보는 것(카메라 위치, 캐릭터 그림·위치·불투명도, 법정 렌더러·조명)이 그대로인 프레임은 다시 그리지 않고 지난 그림을 씀. 불이 켜져 있으면 매 프레임 그림. 놓친 변화는 최대 1초 늦음. 캐릭터 쪽 바뀔 때만 그리기는 [Character] ChangeOnly");
-            StageMaskSkip = c.Bind("Stage", "ScreenMaskSkip", true,
-                "법정 화면 모양을 자르는 스텐실 마스크가 화면 전체를 덮는 사각형일 때(화면 분할이 아닐 때)는 마스크를 끔. 잘라낼 것이 없어 그림은 같고, 1080p에서 그래픽 칩 약 0.9 ms. 화면 분할 연출이 시작되면 그 프레임부터 다시 켬");
-            SteamThrottle = c.Bind("Cpu", "SteamThrottle", true,
-                "Steam 콜백 처리를 초당 60번까지만 함 (게임은 매 프레임 Steam 클라이언트를 확인). 업적 등 알림이 최대 16 ms 늦을 뿐 놓치지 않음");
-            RaycastReuse = c.Bind("Cpu", "RaycastReuse", true,
-                "마우스가 그대로이고 클릭·휠이 없으면 UI 마우스 검사 결과를 16 ms 동안 다시 씀. 클릭·움직임이 있는 프레임은 항상 새로 검사. 멈춘 마우스 아래로 나타난 버튼의 강조 표시가 최대 16 ms 늦음");
-            FastGlyphs = c.Bind("Text", "FastGlyphs", true,
-                "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 이 표 읽기가 글자마다 수십 ms라 처음 보는 한글이 많은 화면(불러오기 목록 등)에서 0.4초 멈춤이 생김. 한글 음절에는 합자가 없어 모양은 같음");
-            GpuTimer = c.Bind("Debug", "GpuTimer", false,
-                "카메라별 GPU 시간을 재서 5초마다 로그에 남기고 화면 패널(PgUp)에 보여 줌 (D3D11 타임스탬프 쿼리, 분석용)");
-            RevealReuse = c.Bind("Text", "RevealReuse", false,
-                "실험: 대사가 완전히 나타난 뒤에는 글자별 투명도 계산과 색상 버퍼 업로드를 쉬게 함. 새 대사·되감기·글자 재생성 때 원래 경로로 복귀. 전체 연출 검증 전 기본 끔");
-            LayerDiag = c.Bind("Debug", "LayerDiag", false,
-                "캐릭터 다시 합성 원인 기록: 5초마다 어떤 캐릭터의 어떤 레이어가 왜 바뀌었는지 로그에 남김 (분석용)");
-            Lab = c.Bind("Debug", "RenderLab", false,
-                "렌더 실험실: F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_mahosaba 폴더에 기록");
+            TargetFps = c.Bind("FrameRate", "TargetFps", 0);
+            MsaaOff = c.Bind("Urp", "MsaaOff", true);
+            Ssao = c.Bind("Urp", "Ssao", SsaoMode.Off);
+            IntermediateAuto = c.Bind("Urp", "IntermediateAuto", true);
+            MainPostOff = c.Bind("Urp", "MainPostOff", true);
+            CharacterChangeOnly = c.Bind("Character", "ChangeOnly", true);
+            FastDetect = c.Bind("Character", "FastDetect", true);
+            CharacterResolution = c.Bind("Character", "Resolution", 0f);
+            StageResolution = c.Bind("Stage", "Resolution", 0f);
+            StageHiddenSkip = c.Bind("Stage", "HiddenSkip", true);
+            StageMsaaOff = c.Bind("Stage", "MsaaOff", true);
+            StagePostOff = c.Bind("Stage", "PostOff", true);
+            StageHalfRate = c.Bind("Stage", "HalfRate", false);
+            FireLite = c.Bind("Stage", "FireLite", true);
+            CourtLite = c.Bind("Stage", "CourtLite", true);
+            StageChangeOnly = c.Bind("Stage", "CourtChangeOnly", true);
+            StageMaskSkip = c.Bind("Stage", "ScreenMaskSkip", true);
+            SteamThrottle = c.Bind("Cpu", "SteamThrottle", true);
+            RaycastReuse = c.Bind("Cpu", "RaycastReuse", true);
+            FastGlyphs = c.Bind("Text", "FastGlyphs", true);
+            RevealReuse = c.Bind("Text", "RevealReuse", false);
+            GpuTimer = c.Bind("Debug", "GpuTimer", false);
+            LayerDiag = c.Bind("Debug", "LayerDiag", false);
+            Lab = c.Bind("Debug", "RenderLab", false);
         }
     }
 

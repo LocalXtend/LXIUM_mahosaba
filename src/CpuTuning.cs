@@ -10,7 +10,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 메인 스레드에서 매 프레임 할 필요 없는 일 줄이기 (17차 ETW, 1080p 재판 대화 300 fps에서 프레임당 메인 스레드 3.2 ms 중)
     static class CpuTuning

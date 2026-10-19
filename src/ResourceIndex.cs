@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using BepInEx.Unity.IL2CPP.Hook;
 using Il2CppInterop.Runtime;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // Naninovel ResourceProvider.IsLocationCached<T>(path)를 경로 색인으로 바꿈.
     // 원래 코드는 지금까지 찾은 모든 리소스 위치(LocationsCache, 수만 개)를 매번 처음부터 훑음

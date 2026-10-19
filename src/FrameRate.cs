@@ -2,12 +2,12 @@ using System;
 using Il2CppInterop.Runtime;
 using UnityEngine;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 프레임 제한 해제. 게임은 CameraManagerExtended.SetTargetFpsLevel로 60/30을 넣고,
     // VSync는 품질 단계(QualitySettings)가 정함. 둘 다 바뀔 수 있어 매 프레임 비교 후 다를 때만 씀.
     // QualitySettings.vSyncCount와 targetFrameRate getter는 IL2CPP 빌드에서 제거됐으므로
-    // UnityPlayer.dll에 등록된 엔진 내부 호출을 직접 찾는다 (docs/ai/mahosaba.md 9.1).
+    // UnityPlayer.dll에 등록된 엔진 내부 호출을 직접 찾는다 (docs/ai/manosaba.md 9.1).
     static class FrameRate
     {
         delegate int GetInt();

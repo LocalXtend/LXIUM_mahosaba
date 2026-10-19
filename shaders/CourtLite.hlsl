@@ -1,4 +1,4 @@
-// LXIUM CourtLite: 법정 재질(URP Lit, ForwardLit 패스)의 가벼운 판. docs/ai/mahosaba-render.md C장
+// LXIUM CourtLite: 법정 재질(URP Lit, ForwardLit 패스)의 가벼운 판. docs/ai/manosaba-render.md C장
 // build_shaders.py가 게임의 URP Lit 셰이더 틀에 이 코드만 넣는다. 엔진이 원본 메타데이터대로 값을 채우므로
 // 상수 버퍼 오프셋과 텍스처·샘플러 레지스터는 원본 변형과 같아야 한다.
 //   CL_VS                정점 셰이더 (원본 _NORMALMAP 변형의 바인딩)
@@ -6,7 +6,7 @@
 //   CL_PS + CL_CUTOUT    벽: 알파 테스트 (원본 _ALPHATEST_ON 변형)
 //   CL_PS + CL_PREMUL    단상: 투명 premultiply (원본 _SURFACE_TYPE_TRANSPARENT _ALPHAPREMULTIPLY_ON 변형)
 // 원본에서 뺀 것: 메인 라이트·추가 라이트 그림자, SSAO, 반사 프로브 블렌딩·박스 투영, 라이트 쿠키·레이어, 메인 라이트.
-// 법정에는 방향광·그림자·쿠키·반사 프로브가 없어(mahosaba.md 6.2) 빠진 항은 원본에서도 0이거나 1이다.
+// 법정에는 방향광·그림자·쿠키·반사 프로브가 없어(manosaba.md 6.2) 빠진 항은 원본에서도 0이거나 1이다.
 // 이 게임은 감마 색공간이라 URP처럼 SH만 sRGB로 바꾼다.
 
 struct VSIn
@@ -115,7 +115,7 @@ cbuffer UnityPerMaterial : register(b3)
     float _Surface;                     // 136
 };
 
-// 레지스터는 원본 변형마다 다름 (mahosaba-render.md C장 표)
+// 레지스터는 원본 변형마다 다름 (manosaba-render.md C장 표)
 #if defined(CL_PREMUL)
 TextureCube _GlossyEnvironmentCubeMap : register(t0);
 SamplerState sampler_GlossyEnvironmentCubeMap : register(s0);

@@ -6,13 +6,13 @@ using BepInEx.Unity.IL2CPP.Utils.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 카메라별 GPU 시간 (진단 설정 Debug.GpuTimer). D3D11 타임스탬프 쿼리를 프레임 첫 렌더 앞, 카메라 렌더 앞뒤,
     // 프레임 끝(WaitForEndOfFrame: Overlay UI·IMGUI까지 그린 뒤)에 넣는다. 프레임 합계 = 첫 렌더 ~ 프레임 끝.
     // 쿼리는 Unity 렌더 스레드에서 D3D11 컨텍스트를 써야 하므로 CommandBuffer.IssuePluginEvent로 렌더 순서 안에서 부른다.
     // 결과는 4프레임 뒤에 읽음 (GPU를 기다리지 않음). D3D11이 아니면 꺼짐.
-    // RenderDoc을 붙이면 BepInEx가 로드되지 않아 모드가 켜진 프레임은 이것으로만 잰다 (mahosaba-render.md 7장)
+    // RenderDoc을 붙이면 BepInEx가 로드되지 않아 모드가 켜진 프레임은 이것으로만 잰다 (manosaba-render.md 7장)
     static unsafe class GpuTimer
     {
         const int Slots = 4;          // 결과를 기다리는 프레임 수

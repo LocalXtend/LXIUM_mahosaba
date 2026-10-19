@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using UnityEngine;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 모드가 쓰는 메인 스레드 시간을 부분별로 잼. 합계는 RenderLab.ModTicks(실험실·화면 패널의 모드 CPU).
     // 진단 설정(Debug.LayerDiag)이면 5초마다 부분별 프레임당 시간·호출 수를 로그에 남김

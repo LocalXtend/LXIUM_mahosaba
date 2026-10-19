@@ -1,4 +1,4 @@
-# LXIUM_mahosaba
+# LXIUM_manosaba
 
 마법소녀의 마녀재판 게임의 최적화를 진행합니다.
 또한 모드 호환성을 지켜냅니다.

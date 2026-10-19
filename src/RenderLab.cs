@@ -8,16 +8,16 @@ using BepInEx.Unity.IL2CPP.Utils.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // 렌더 실험실 (docs/ai/mahosaba-render.md 3장). 설정 Debug.RenderLab=true일 때 F10으로 시작.
+    // 렌더 실험실 (docs/ai/manosaba-render.md 3장). 설정 Debug.RenderLab=true일 때 F10으로 시작.
     // 게임 원래 상태와 지금 설정을 잰 뒤, 지금 설정에서 하나씩만 바꿔 8초씩(안정 2초 + 측정 6초)
     // 프레임 통계·스크린샷을 남긴다. 마지막에 지금 설정을 다시 재서 발열 등으로 생긴 차이를 본다.
     // 끝나면 설정값으로 되돌린다. 측정 중에는 프레임 제한과 VSync를 끈다.
     static class RenderLab
     {
         const float Settle = 2f, Sample = 6f;
-        static readonly string Dir = Path.Combine(Paths.BepInExRootPath, "LXIUM_mahosaba");
+        static readonly string Dir = Path.Combine(Paths.BepInExRootPath, "LXIUM_manosaba");
 
         // GPU 타이머의 카메라 콜백이 셈 (꺼져 있으면 0)
         static int _cameraRenders;
@@ -48,7 +48,7 @@ namespace LXIUM_mahosaba
             host.StartCoroutine(Run().WrapToIl2Cpp());
         }
 
-        // 자동 측정용: BepInEx/LXIUM_mahosaba/lab.start 파일이 생기면 F10 없이 시작 (키 입력은 창 포커스·입력 도우미 창에 막힐 수 있음).
+        // 자동 측정용: BepInEx/LXIUM_manosaba/lab.start 파일이 생기면 F10 없이 시작 (키 입력은 창 포커스·입력 도우미 창에 막힐 수 있음).
         // 1초마다 확인
         static float _nextPoll;
 

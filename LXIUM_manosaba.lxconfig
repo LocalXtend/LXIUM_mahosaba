@@ -1,0 +1,150 @@
+# LXIUM_manosaba 설정 설명 (LXIUM docs/ai/lxconfig.md)
+# src/Settings.cs의 Bind와 같은 섹션·키·기본값이어야 함
+
+Section FrameRate
+Name FrameRate ko "프레임"
+Name FrameRate en "Frame rate"
+Set TargetFps Int 0 Range -1 360
+Name TargetFps ko "목표 fps"
+Name TargetFps en "Target FPS"
+Lang TargetFps ko "0 = 모니터 주사율에 맞춤(VSync 켬), -1 = 제한 없음(VSync 끔), 그 밖의 숫자 = 그 fps로 제한(VSync 끔). 게임의 60/30 설정보다 우선"
+Lang TargetFps en "0 = match the monitor refresh rate (VSync on), -1 = unlimited (VSync off), any other number = cap at that FPS (VSync off). Overrides the game's 60/30 setting"
+
+Section Urp
+Name Urp ko "그래픽 기본 설정"
+Name Urp en "Graphics basics"
+Set MsaaOff Bool true
+Name MsaaOff ko "2D 카메라 MSAA 끄기"
+Name MsaaOff en "Turn off 2D camera MSAA"
+Lang MsaaOff ko "2D(직교) 카메라의 MSAA 4x를 끔. 스프라이트·UI는 가장자리가 투명이라 MSAA 효과가 없음. 3D 법정 카메라는 '법정' 항목이 정함"
+Lang MsaaOff en "Turns off 4x MSAA on 2D (orthographic) cameras. Sprites and UI have transparent edges, so MSAA does nothing there. The 3D court camera is set under 'Court'"
+Set Ssao Enum Off Values Off|StageLite|StageOnly|Game
+Name Ssao ko "SSAO 범위"
+Name Ssao en "SSAO scope"
+Lang Ssao ko "SSAO(화면 공간 앰비언트 오클루전) 적용 범위. Off = 모두 끔, StageLite = 3D 법정만 + 절반 해상도·낮은 품질, StageOnly = 법정만 원래 품질, Game = 원래대로 모든 카메라. 법정 조명이 스포트라이트뿐이라 측정에서 넷의 법정 화면이 화소까지 같았음"
+Lang Ssao en "Where SSAO (screen-space ambient occlusion) is used. Off = nowhere, StageLite = 3D court only at half resolution and low quality, StageOnly = court only at original quality, Game = all cameras as in the original. The court is lit only by spotlights, so all four looked identical pixel for pixel in tests"
+Set IntermediateAuto Bool true
+Name IntermediateAuto ko "중간 텍스처 필요할 때만"
+Name IntermediateAuto en "Intermediate texture only when needed"
+Lang IntermediateAuto ko "렌더러의 중간 텍스처를 Always에서 Auto로. 필요 없는 카메라(캐릭터 합성 등)의 복사 패스를 없앰"
+Lang IntermediateAuto en "Switches the renderer's intermediate texture from Always to Auto, removing copy passes on cameras that don't need it (character compositing and so on)"
+Set MainPostOff Bool true
+Name MainPostOff ko "메인 카메라 후처리 끄기"
+Name MainPostOff en "Turn off main camera post-processing"
+Lang MainPostOff ko "메인 카메라(배경·법정 화면·UI를 합치는 카메라)의 후처리를 끔. 볼륨 효과가 모두 0이라 하는 일은 FXAA뿐이고 1080p에서 그래픽 칩 1.3 ms. 법정은 법정 카메라가 자기 FXAA를 켜서 가장자리가 그대로. 게임 옵션의 포스트 프로세싱보다 우선"
+Lang MainPostOff en "Turns off post-processing on the main camera (the one that combines background, court view and UI). All volume effects are zero, so it only runs FXAA, costing 1.3 ms of GPU time at 1080p. The court camera keeps its own FXAA, so court edges stay the same. Overrides the game's post-processing option"
+
+Section Character
+Name Character ko "캐릭터"
+Name Character en "Characters"
+Set ChangeOnly Bool true
+Name ChangeOnly ko "바뀔 때만 다시 그리기"
+Name ChangeOnly en "Redraw only on change"
+Lang ChangeOnly ko "레이어 캐릭터를 바뀐 프레임에만 다시 합성. 게임은 표정이 그대로여도 매 프레임 카메라 렌더를 함"
+Lang ChangeOnly en "Recomposes layered characters only on frames where they changed. The game otherwise renders them every frame even when the expression is the same"
+Set FastDetect Bool true
+Name FastDetect ko "빠른 변화 감지"
+Name FastDetect en "Fast change detection"
+Lang FastDetect ko "바뀔 때만 다시 그리기의 변화 확인을 가볍게: Naninovel이 표정·옷을 바꿀 때 보내는 신호를 받아 그때만 확인. 캐릭터마다 2초에 한 번은 직접 확인 (신호로 못 잡은 변화는 최대 2초 늦음)"
+Lang FastDetect en "Makes change checks cheaper: listens for Naninovel's expression and outfit signals and checks only then. Each character is still checked directly every 2 seconds (a change missed by the signal can show up to 2 seconds late)"
+Set Resolution Float 0 Range 0 1
+Name Resolution ko "캐릭터 합성 해상도"
+Name Resolution en "Character resolution"
+Lang Resolution ko "레이어 캐릭터 합성 해상도 배율. 0 = 화면 해상도에 맞춤(1080p에서 0.75), 1 = 원래(100 PPU)"
+Lang Resolution en "Resolution scale for layered characters. 0 = match the screen resolution (0.75 at 1080p), 1 = original (100 PPU)"
+
+Section Stage
+Name Stage ko "법정"
+Name Stage en "Court"
+Set Resolution Float 0 Range 0 1
+Name Stage.Resolution ko "법정 해상도"
+Name Stage.Resolution en "Court resolution"
+Lang Stage.Resolution ko "재판 3D 무대 렌더 텍스처 배율 (원래 1920x1080 고정). 0 = 화면 높이에 맞춤(1080 이상이면 원래 크기), 1 = 원래"
+Lang Stage.Resolution en "Render texture scale for the 3D trial stage (originally fixed at 1920x1080). 0 = match the screen height (original size at 1080 or above), 1 = original"
+Set HiddenSkip Bool true
+Name HiddenSkip ko "안 보이는 법정 카메라 끄기"
+Name HiddenSkip en "Skip hidden court cameras"
+Lang HiddenSkip ko "화면에 보이지 않는 무대 카메라는 그리지 않음"
+Lang HiddenSkip en "Doesn't draw stage cameras that aren't visible on screen"
+Set MsaaOff Bool true
+Name Stage.MsaaOff ko "법정 MSAA 끄기"
+Name Stage.MsaaOff en "Turn off court MSAA"
+Lang Stage.MsaaOff ko "법정 렌더 텍스처의 MSAA 2x를 끔. 가장자리는 FXAA가 다듬음 (측정 장면에서 화면 차이 없음)"
+Lang Stage.MsaaOff en "Turns off 2x MSAA on the court render texture. FXAA smooths the edges (no visible difference in tested scenes)"
+Set PostOff Bool true
+Name PostOff ko "법정 후처리 끄기"
+Name PostOff en "Turn off court post-processing"
+Lang PostOff ko "법정 카메라의 후처리(색 보정 표 + FXAA)를 끔. 볼륨 효과가 모두 0이라 색은 같고, 화면 전체 FXAA는 메인 카메라가 한 번 더 함"
+Lang PostOff en "Turns off the court camera's post-processing (color grading + FXAA). Volume effects are all zero so colors stay the same, and the main camera applies FXAA to the whole screen anyway"
+Set HalfRate Bool false
+Name HalfRate ko "법정 반 프레임"
+Name HalfRate en "Court half rate"
+Lang HalfRate ko "법정 카메라가 멈춰 있으면 두 프레임에 한 번만 그림. 움직일 때는 매 프레임. 불·캐릭터 변화가 반 박자 늦을 수 있음"
+Lang HalfRate en "When the court camera is still, draws it every other frame; every frame while it moves. Fire and character changes can lag by half a beat"
+Set FireLite Bool true
+Name FireLite ko "가벼운 불 셰이더"
+Name FireLite en "Lightweight fire shader"
+Lang FireLite ko "법정 불을 LXIUM FireLite 셰이더로 그림 (텍스처 읽기 8 → 4회, 불 비용 약 1/4. 벽·바닥과 닿는 곳의 흐림 없음). Direct3D 11 전용, 다른 API에서는 원본"
+Lang FireLite en "Draws court fire with the LXIUM FireLite shader (texture reads 8 → 4, about a quarter of the cost; no soft fade where it touches walls and floor). Direct3D 11 only; other APIs use the original"
+Set CourtLite Bool true
+Name CourtLite ko "가벼운 법정 셰이더"
+Name CourtLite en "Lightweight court shader"
+Lang CourtLite ko "법정 바닥·계단·벽·단상을 LXIUM CourtLite 셰이더로 그림 (그림자·SSAO·반사 프로브 블렌딩을 뺀 판, 텍스처 읽기 9 → 5회, 측정 장면에서 화면 차이 없음). Direct3D 11 전용, 다른 API에서는 원본"
+Lang CourtLite en "Draws the court floor, stairs, walls and podium with the LXIUM CourtLite shader (no shadow, SSAO or reflection probe blending; texture reads 9 → 5; no visible difference in tested scenes). Direct3D 11 only; other APIs use the original"
+Set CourtChangeOnly Bool true
+Name CourtChangeOnly ko "법정 바뀔 때만 그리기"
+Name CourtChangeOnly en "Redraw court only on change"
+Lang CourtChangeOnly ko "법정 카메라가 보는 것(카메라 위치, 캐릭터 그림·위치·불투명도, 법정 렌더러·조명)이 그대로인 프레임은 다시 그리지 않고 지난 그림을 씀. 불이 켜져 있으면 매 프레임 그림. 놓친 변화는 최대 1초 늦음"
+Lang CourtChangeOnly en "Reuses the last court image on frames where nothing the court camera sees has changed (camera position, character images, positions and opacity, court renderers and lights). Draws every frame while the fire is lit. A missed change shows up at most 1 second late"
+Set ScreenMaskSkip Bool true
+Name ScreenMaskSkip ko "법정 화면 마스크 건너뛰기"
+Name ScreenMaskSkip en "Skip full-screen court mask"
+Lang ScreenMaskSkip ko "법정 화면 모양을 자르는 스텐실 마스크가 화면 전체를 덮는 사각형일 때(화면 분할이 아닐 때)는 마스크를 끔. 그림은 같고 1080p에서 그래픽 칩 약 0.9 ms. 화면 분할 연출이 시작되면 그 프레임부터 다시 켬"
+Lang ScreenMaskSkip en "Turns off the stencil mask that shapes the court view when it just covers the whole screen (no split screen). The image is the same and it saves about 0.9 ms of GPU time at 1080p. Turns back on the frame a split-screen effect starts"
+
+Section Cpu
+Name Cpu ko "CPU"
+Name Cpu en "CPU"
+Set SteamThrottle Bool true
+Name SteamThrottle ko "Steam 확인 줄이기"
+Name SteamThrottle en "Throttle Steam callbacks"
+Lang SteamThrottle ko "Steam 콜백 처리를 초당 60번까지만 함 (게임은 매 프레임 Steam 클라이언트를 확인). 업적 등 알림이 최대 16 ms 늦을 뿐 놓치지 않음"
+Lang SteamThrottle en "Runs Steam callbacks at most 60 times per second (the game otherwise polls Steam every frame). Achievements and other notices are at most 16 ms late, never missed"
+Set RaycastReuse Bool true
+Name RaycastReuse ko "마우스 검사 재사용"
+Name RaycastReuse en "Reuse mouse hit tests"
+Lang RaycastReuse ko "마우스가 그대로이고 클릭·휠이 없으면 UI 마우스 검사 결과를 16 ms 동안 다시 씀. 클릭·움직임이 있는 프레임은 항상 새로 검사"
+Lang RaycastReuse en "Reuses the UI mouse hit test for 16 ms while the mouse is still and there are no clicks or scrolling. Frames with clicks or movement always test again"
+
+Section Text
+Name Text ko "글자"
+Name Text en "Text"
+Set FastGlyphs Bool true
+Name FastGlyphs ko "글자 추가 빠르게"
+Name FastGlyphs en "Faster glyph loading"
+Lang FastGlyphs ko "대사에 처음 나오는 글자를 폰트에 추가할 때 합자·커닝 표를 다시 읽지 않음. 처음 보는 한글이 많은 화면(불러오기 목록 등)의 0.4초 멈춤을 없앰. 한글 음절에는 합자가 없어 모양은 같음"
+Lang FastGlyphs en "Skips re-reading ligature and kerning tables when a new character is added to the font. Removes 0.4-second stalls on screens with many new Korean characters (like the load list). Korean syllables have no ligatures, so text looks the same"
+Set RevealReuse Bool false
+Name RevealReuse ko "대사 표시 계산 쉬기 (실험)"
+Name RevealReuse en "Pause text reveal work (experimental)"
+Lang RevealReuse ko "실험: 대사가 완전히 나타난 뒤에는 글자별 투명도 계산과 색상 버퍼 업로드를 쉬게 함. 새 대사·되감기·글자 재생성 때 원래 경로로 복귀"
+Lang RevealReuse en "Experimental: once a line is fully shown, pauses per-character opacity work and color buffer uploads. Returns to normal on a new line, rewind or text rebuild"
+
+Section Debug
+Name Debug ko "분석용"
+Name Debug en "Diagnostics"
+Set GpuTimer Bool false
+Name GpuTimer ko "GPU 시간 재기"
+Name GpuTimer en "GPU timer"
+Lang GpuTimer ko "카메라별 GPU 시간을 재서 5초마다 로그에 남기고 화면 패널(PgUp)에 보여 줌 (분석용)"
+Lang GpuTimer en "Measures GPU time per camera, logs it every 5 seconds and shows it in the overlay (PgUp). For diagnostics"
+Set LayerDiag Bool false
+Name LayerDiag ko "캐릭터 다시 합성 원인 기록"
+Name LayerDiag en "Log character recompose causes"
+Lang LayerDiag ko "5초마다 어떤 캐릭터의 어떤 레이어가 왜 바뀌었는지 로그에 남김 (분석용)"
+Lang LayerDiag en "Every 5 seconds, logs which layer of which character changed and why. For diagnostics"
+Set RenderLab Bool false
+Name RenderLab ko "렌더 실험실"
+Name RenderLab en "Render lab"
+Lang RenderLab ko "F10을 누르면 설정 조합을 8초씩 바꿔 가며 프레임 통계·스크린샷을 BepInEx/LXIUM_manosaba 폴더에 기록"
+Lang RenderLab en "Press F10 to cycle setting combinations for 8 seconds each and record frame stats and screenshots in the BepInEx/LXIUM_manosaba folder"

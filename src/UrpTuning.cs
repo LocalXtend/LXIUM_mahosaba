@@ -4,9 +4,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // 게임이 3D 기본 템플릿(URP-HighFidelity)을 그대로 써서 생기는 비용을 줄임 (docs/ai/mahosaba.md 4장).
+    // 게임이 3D 기본 템플릿(URP-HighFidelity)을 그대로 써서 생기는 비용을 줄임 (docs/ai/manosaba.md 4장).
     // 에셋은 하나뿐이고 품질 단계별 교체가 없으므로 한 번 찾으면 유지됨.
     static class UrpTuning
     {

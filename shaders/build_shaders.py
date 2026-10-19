@@ -1,4 +1,4 @@
-"""LXIUM 셰이더 번들 생성: FireLite, CourtLite (docs/ai/mahosaba-render.md C장)
+"""LXIUM 셰이더 번들 생성: FireLite, CourtLite (docs/ai/manosaba-render.md C장)
 
 Unity 에디터 없이 만든다. 게임 번들의 원본 셰이더에서 첫 패스(화면 그리기)의 속성·바인딩 메타데이터만 남기고,
 고른 D3D11 변형의 정점·픽셀 코드를 LXIUM HLSL을 컴파일한 것으로 바꾼다. 원본의 다른 패스·변형과
@@ -197,7 +197,7 @@ def main():
         print(f"{spec['name']}: {n} entries")
 
     a = ab.read_typetree()
-    a["m_Name"] = a["m_AssetBundleName"] = "lxium_mahosaba"
+    a["m_Name"] = a["m_AssetBundleName"] = "lxium_manosaba"
     a["m_PreloadTable"] = [{"m_FileID": 0, "m_PathID": s.path_id} for _, s in kept]
     a["m_Container"] = [[name.lower(), {"preloadIndex": i, "preloadSize": 1, "asset": {"m_FileID": 0, "m_PathID": s.path_id}}]
                         for i, (name, s) in enumerate(kept)]
@@ -216,7 +216,7 @@ def main():
         o.type_id = used.index(o.type_id)
     sf.script_types, sf.ref_types, sf.externals = [], [], []
     # 게임 번들과 같은 내부 파일 이름이면 Unity가 이미 로드된 번들로 보고 거부하므로 바꿈
-    new_cab = "CAB-" + hashlib.md5(b"LXIUM_mahosaba").hexdigest()
+    new_cab = "CAB-" + hashlib.md5(b"LXIUM_manosaba").hexdigest()
     sf.name = new_cab
     bundle.files = {new_cab: sf}
     data = bundle.save(packer="lz4")

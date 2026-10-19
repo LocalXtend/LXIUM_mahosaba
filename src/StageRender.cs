@@ -10,7 +10,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.UI;
 using WitchTrials.Views;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 재판 3D 무대 (Boot 씬의 PerspectiveStage). 원근 카메라 2대가 각각 1920x1080 RT에 그리고,
     // ScreenCanvas의 RawImage 2개가 그 RT를 보여 준다 (화면 분할). 게임은 무대를 띄우면 두 카메라를

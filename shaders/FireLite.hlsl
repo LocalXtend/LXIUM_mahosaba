@@ -1,4 +1,4 @@
-// LXIUM FireLite: 법정 불(SH_Vefects_VFX_URP_Fire_Flames_01)의 가벼운 판. docs/ai/mahosaba-render.md C장
+// LXIUM FireLite: 법정 불(SH_Vefects_VFX_URP_Fire_Flames_01)의 가벼운 판. docs/ai/manosaba-render.md C장
 // build_shaders.py가 게임 셰이더의 속성·바인딩 틀에 이 코드만 넣어 번들을 만든다. 그래서 상수 버퍼 위치와
 // 텍스처·샘플러 레지스터는 원본과 같아야 한다 (게임이 원본 메타데이터대로 값을 채움).
 // 원본 대비: 텍스처 읽기 8회(깊이 포함) → 4회, 마스크가 빈 픽셀은 2회 뒤 중단. 깊이 페이드는 뺌.

@@ -1,6 +1,6 @@
 using TMPro;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // TextMeshPro 설정. 이 게임의 TMP 폰트는 동적이라 대사에 처음 나오는 글자를 그때 폰트에 추가하는데, 글자마다
     // TMP_FontAsset.UpdateGSUB/GPOSFontFeaturesForNewGlyphIndex가 폰트의 OpenType 표 전체를 다시 읽고 버림

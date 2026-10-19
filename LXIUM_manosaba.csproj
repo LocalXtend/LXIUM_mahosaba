@@ -6,9 +6,9 @@
     <DefineConstants Condition="'$(UiBench)' == 'true'">$(DefineConstants);LXIUM_UI_BENCH</DefineConstants>
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <AssemblyName>LXIUM_mahosaba</AssemblyName>
-    <RootNamespace>LXIUM_mahosaba</RootNamespace>
-    <Product>LXIUM mahosaba</Product>
+    <AssemblyName>LXIUM_manosaba</AssemblyName>
+    <RootNamespace>LXIUM_manosaba</RootNamespace>
+    <Product>LXIUM manosaba</Product>
     <Version>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)ver.txt').Trim())</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -50,7 +50,7 @@
 
   <!-- shaders/build_shaders.py로 만든 FireLite·CourtLite 셰이더 번들. DLL에 넣어 파일 하나로 배포 -->
   <ItemGroup>
-    <EmbeddedResource Include="res\lxium_mahosaba.bundle" LogicalName="lxium_mahosaba.bundle" />
+    <EmbeddedResource Include="res\lxium_manosaba.bundle" LogicalName="lxium_manosaba.bundle" />
   </ItemGroup>
 
   <!-- docs/ai/addon.md 7장: lxium.json의 version은 ver.txt와 같아야 함 -->
@@ -69,12 +69,15 @@
     </PropertyGroup>
     <RemoveDir Directories="$(PkgDir)" />
     <Copy SourceFiles="$(MSBuildThisFileDirectory)lxium.json" DestinationFolder="$(PkgDir)" />
+    <!-- zip 루트의 선택 파일: 모드 패널 아이콘, 설정 설명 (addon.md 2장) -->
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)addon.png" DestinationFolder="$(PkgDir)" Condition="Exists('$(MSBuildThisFileDirectory)addon.png')" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)$(AssemblyName).lxconfig" DestinationFolder="$(PkgDir)" Condition="Exists('$(MSBuildThisFileDirectory)$(AssemblyName).lxconfig')" />
     <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(PkgDir)bepinex6\BepInEx\plugins\$(AssemblyName)" />
     <MakeDir Directories="$(DistDir)" />
     <ZipDirectory SourceDirectory="$(PkgDir)" DestinationFile="$(DistDir)$(AssemblyName)-$(Version).zip" Overwrite="true" />
   </Target>
 
-  <!-- 개발용: -p:Deploy=true 이면 게임의 BepInEx/plugins/LXIUM_mahosaba/ 에 바로 복사 -->
+  <!-- 개발용: -p:Deploy=true 이면 게임의 BepInEx/plugins/LXIUM_manosaba/ 에 바로 복사 -->
   <Target Name="DeployToGame" AfterTargets="Build" Condition="'$(Deploy)' == 'true'">
     <Copy SourceFiles="$(OutDir)$(AssemblyName).dll" DestinationFolder="$(GameDir)\BepInEx\plugins\$(AssemblyName)" />
   </Target>

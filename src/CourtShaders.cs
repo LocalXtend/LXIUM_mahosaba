@@ -6,9 +6,9 @@ using Il2CppInterop.Runtime;
 using UnityEngine;
 using WitchTrials.Views;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // 법정(Court 프리팹) 재질의 셰이더를 LXIUM 셰이더로 바꿔 끼움 (docs/ai/mahosaba-render.md C장).
+    // 법정(Court 프리팹) 재질의 셰이더를 LXIUM 셰이더로 바꿔 끼움 (docs/ai/manosaba-render.md C장).
     // - FireLite: 불 파티클 25개 (원본 SH_Vefects_VFX_URP_Fire_Flames_01)
     // - CourtLite: 바닥·계단·벽·단상 (원본 URP Lit)
     // 재질의 셰이더만 바꾸므로 게임의 불 켜고 끄기(Court.ChangeFireFxActivity)와 재질 값·키워드는 그대로 따른다.
@@ -120,7 +120,7 @@ namespace LXIUM_mahosaba
                 try
                 {
                     var mem = new MemoryStream();
-                    using (var s = typeof(CourtShaders).Assembly.GetManifestResourceStream("lxium_mahosaba.bundle"))
+                    using (var s = typeof(CourtShaders).Assembly.GetManifestResourceStream("lxium_manosaba.bundle"))
                         s.CopyTo(mem);
                     var bundle = AssetBundle.LoadFromMemory(mem.ToArray());
                     foreach (var o in bundle.LoadAllAssetsAsync(Il2CppType.Of<Shader>()).allAssets)

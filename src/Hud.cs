@@ -5,7 +5,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // 화면 오른쪽 패널. PgUp = 프레임 통계, PgDn = LXIUM 플래그 목록 (켜짐 초록·꺼짐 빨강, 마우스를 올리면 설명).
     // 플래그는 지금 실제로 적용된 값을 읽으므로 렌더 실험실(F10)이 바꾸는 것도 그대로 보인다. 실험실 스크린샷에는 숨김

@@ -10,9 +10,9 @@ using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using UnityEngine;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // BepInEx 6 IL2CPP 진입점. 설정 파일은 BepInEx/config/LXIUM_mahosaba.cfg (첫 실행 때 생성)
+    // BepInEx 6 IL2CPP 진입점. 설정 파일은 BepInEx/config/LXIUM_manosaba.cfg (첫 실행 때 생성)
     [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
     public sealed class Plugin : BasePlugin
     {
@@ -38,9 +38,19 @@ namespace LXIUM_mahosaba
             L.LogInfo($"prepared {n} methods");
         }
 
+        // id를 LXIUM_mahosaba → LXIUM_manosaba로 바꿈(게임 이름 표기 바로잡기). 옛 설정 파일이 있고 새 파일이 없으면 한 번 옮겨 씀
+        void MigrateOldConfig()
+        {
+            var old = System.IO.Path.Combine(Paths.ConfigPath, "LXIUM_mahosaba.cfg");
+            if (!System.IO.File.Exists(old) || System.IO.File.Exists(Config.ConfigFilePath)) return;
+            System.IO.File.Copy(old, Config.ConfigFilePath);
+            Config.Reload();
+        }
+
         public override void Load()
         {
             L = Log;
+            MigrateOldConfig();
             Settings.Bind(Config);
             RenderLab.ApplySettings();
             new Harmony(MyPluginInfo.PLUGIN_GUID).PatchAll(typeof(Plugin).Assembly);

@@ -1,8 +1,8 @@
 # 대사·UI 최적화 연구와 인계 (AI용)
 
-- 사람용: `../human/mahosaba-ui.md`
+- 사람용: `../human/manosaba-ui.md`
 - 조사일: 2026-10-18 KST. 출발 커밋 `52ca387` (0.6.1).
-- 기존 렌더링·로딩 연구는 `mahosaba-render.md`와 `mahosaba.md`. 이 문서는 그 작업과 별도로 추가한 대사·UI 연구를 기록한다.
+- 기존 렌더링·로딩 연구는 `manosaba-render.md`와 `manosaba.md`. 이 문서는 그 작업과 별도로 추가한 대사·UI 연구를 기록한다.
 - 제약: 원본 exe·DLL·번들 수정 금지. BepInEx 런타임 모드로만 동작. Windows 10/11 대상으로, 화질과 진행 순서를 유지한다. Windows 10 별도 실기 검증은 하지 않았다.
 - 600 fps는 목표이며 달성 결과가 아니다. CPU 절감과 GPU 병목 해소를 혼동하지 않는다. 메인 카메라 3~4.8 ms가 남으면 CPU만 줄여도 1.67 ms 예산에는 도달하지 못한다.
 
@@ -73,7 +73,7 @@ dotnet run --project tools/Prof -c Release -- check-ui-hooks "<게임 폴더>"
 - `[Debug] LayerDiag=true`: 5초마다 `text reveal`의 on/calls/skipped/cpu 및 적용을 막는 이유를 기록. 이 값에는 진단·Harmony 경계 비용이 들어가므로 순수 네이티브 함수 시간으로 부르지 않는다.
 - F10 실험실은 기존 00~05 뒤에 `06_revealOn`, `07_revealOff`, `08_current`를 추가한다. 같은 대사가 모두 나타난 채 유지되도록 한다. 끝에는 원래 설정 복원.
 - 자동 입력에서 기능키가 전달되지 않을 때: `dotnet build -c Debug -p:UiBench=true -p:Deploy=true`. `[Debug] RenderLab=true`인 실행에서 120초 뒤 off/on/off/on 각 8초 비교를 한 번 시작한다. 첫 2초 안정, 다음 6초 측정. **Debug에서만 유효**하고 Release에는 자동 시작 코드가 없다. 120초 안에 원하는 세이브를 불러오고 대사가 완전히 나타난 상태를 유지한다.
-- 실험실은 `BepInEx/LXIUM_mahosaba/<시각>/lab.txt`와 JPG를 기록. 최초 시험은 세이브 로딩·대사 없음 상태가 섞여 성능 결론에 쓰지 않았다.
+- 실험실은 `BepInEx/LXIUM_manosaba/<시각>/lab.txt`와 JPG를 기록. 최초 시험은 세이브 로딩·대사 없음 상태가 섞여 성능 결론에 쓰지 않았다.
 - 화면 비교는 대사 영역을 우선하고 시계·다음 아이콘·오버레이 같은 애니메이션을 제외한다. 텍스트가 없는 프레임은 재사용 효과 검증이 아니다.
 - 다음 대사 타이핑, 즉시 표시, 불러오기, 비활성화·재활성화, 같은 문장 재배치, 되감기, 루비·커스텀 알파를 검증하고 실제로 한 항목과 하지 않은 항목을 나눠 기록한다.
 

@@ -6,7 +6,7 @@ using HarmonyLib;
 using Naninovel.UI;
 using UnityEngine;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
     // RevealFader는 완성된 대사도 매 프레임 글자별 알파를 계산하고 색상 버퍼를 다시 올림.
     static class RevealWork

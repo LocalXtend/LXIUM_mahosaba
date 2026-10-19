@@ -7,9 +7,9 @@ using Il2CppInterop.Runtime;
 using Naninovel;
 using UnityEngine;
 
-namespace LXIUM_mahosaba
+namespace LXIUM_manosaba
 {
-    // Naninovel 액터(캐릭터·배경) 렌더 경로 최적화 (docs/ai/mahosaba.md 5장, mahosaba-render.md 2장).
+    // Naninovel 액터(캐릭터·배경) 렌더 경로 최적화 (docs/ai/manosaba.md 5장, manosaba-render.md 2장).
     // 게임 경로: LayeredDrawer.DrawLayers(카메라로 레이어 합성 → RT)
     //          → TransitionalRenderer.RenderToTexture(전환 셰이더로 RT 복사, 매 프레임)
     //          → Graphics.DrawMesh(화면). 앞의 두 단계는 입력이 그대로면 결과도 그대로라 건너뛴다.
@@ -29,7 +29,7 @@ namespace LXIUM_mahosaba
         // 끄면 매번 해시 검사 (0.5.x 이전 방식)
         internal static bool FastDetect;
         static long _epoch;
-        // 안전 갱신·확인은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 끊김이 생김 (mahosaba.md 10장 2차)
+        // 안전 갱신·확인은 프레임당 하나씩만. 재판처럼 캐릭터가 많으면 같은 프레임에 몰려 끊김이 생김 (manosaba.md 10장 2차)
         static int _layerRefreshFrame = -1, _copyRefreshFrame = -1, _pollFrame = -1;
         // 진단: 이벤트 없이 확인 검사에서 발견된 변화 수 (0이어야 이벤트 감지가 빠짐없음)
         static int _diagMissed;
@@ -77,7 +77,7 @@ namespace LXIUM_mahosaba
         static readonly Dictionary<IntPtr, float> OriginalPpu = new();
 
         // 레이어 상태 해시. 이 게임의 캐릭터 프리팹에는 Animator가 없고 표정·포즈는
-        // 렌더러 켜고 끄기, 스프라이트·색·재질·레이어 교체로만 바뀐다 (docs/ai/mahosaba.md 5.2)
+        // 렌더러 켜고 끄기, 스프라이트·색·재질·레이어 교체로만 바뀐다 (docs/ai/manosaba.md 5.2)
         static long LayerHash(DrawerState s, float ppu)
         {
             long h = BitConverter.SingleToInt32Bits(ppu);
