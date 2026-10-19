@@ -41,9 +41,9 @@ git은 dev 브렌치를 사용합니다.
 
 git 저장소는 이 프로젝트 전용입니다 (https://github.com/LocalXtend/LXIUM_manosaba). 런처·규격 문서가 있는 LXIUM 저장소와 따로 커밋합니다.
 로컬에서는 LXIUM 저장소의 `optimizeMods/LXIUM_manosaba/`에 clone해 둡니다. LXIUM 저장소는 `optimizeMods/`를 git에서 제외합니다.
-릴리즈 태그·제목은 `<id>-v<버전>` 형식입니다 (예: `LXIUM_sephiria-v1.0.0`). `id`는 애드온 구조 절의 값입니다.
+릴리즈 태그·제목은 `<id>-v<버전>` 형식입니다 (예: `LXIUM_manosaba-v0.8.0`). `id`는 애드온 구조 절의 값입니다. 태그는 그 버전 커밋에 둡니다 (런처가 태그의 `lxium.json`·`addon.png`를 읽음).
 릴리즈에는 `dist/<id>-<버전>.zip`을 올리고, 본문은 LXIUM 저장소 AGENTS.md의 "git 릴리즈에 관해서" 형식을 따릅니다.
-릴리즈한 뒤 LXIUM 저장소에서 `build.ps1`로 공식 애드온 모음(catalog.json)을 갱신해 커밋합니다 (LXIUM `docs/ai/catalog.md` 4장). 모음의 sha256과 같아야 하므로 릴리즈에는 `build.ps1`이 모은 zip을 그대로 올립니다.
+공식 애드온 모음(LXIUM `catalog.json`)이 이 저장소를 가리키므로 릴리즈만 하면 런처가 새 버전을 찾습니다. 모음은 고치지 않습니다 (LXIUM `docs/ai/catalog.md`).
 
 커밋은 GitHub 계정 LocalXtend로 합니다 (`user.name=LocalXtend`, `user.email=285211027+LocalXtend@users.noreply.github.com`).
 
